@@ -1,13 +1,13 @@
 import express from "express";
+import routes from "./routes";
+import prisma from "../prisma/client";
+import connectBD from "./config/db";
 
-const app = express();
+connectBD(prisma);
+
+export const app = express();
+routes(app);
 const PORT = 3000;
-
-app.use(express.json());
-
-app.get("/", (req, res) => {
-  res.send("Servidor Express com TypeScript está rodando!!! 🚀");
-});
 
 app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
