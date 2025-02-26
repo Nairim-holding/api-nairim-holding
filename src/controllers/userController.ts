@@ -15,7 +15,7 @@ export class UserController {
     static async createUser (req: Request , res: Response) {
         try{
             const create = await createUsers( req.body );
-            res.status(200).json({ status: "200", message: `O usuario ${(await create).name} foi criado com sucesso!` });
+            res.status(200).json({ status: 200, message: `O usuario ${(await create).name} foi criado com sucesso!` });
         } catch (error) {
             res.status(500)
         }
