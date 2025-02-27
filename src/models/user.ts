@@ -17,9 +17,8 @@ export async function createUsers(data: any) {
         data
     });
     return user;
-  }
+}
   
-
 export async function deleteUsers(id: number){
     return await prisma.user.delete({where: { id: id}});
 }
