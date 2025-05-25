@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import { getUsersByEmail } from "../models/user";
-
+import bcrypt from "bcrypt";
 import jwt from 'jsonwebtoken';
 
 export class AuthenticateController {
@@ -19,7 +19,8 @@ export class AuthenticateController {
                 return res.status(400).json({ status: 400, message: 'Por favor insira um email já cadastrado.' });
             }
 
-            if( user?.password != password ){
+            const passwordMatch = await bcrypt.compare(password, user.password);
+            if(!passwordMatch){
                 return res.status(400).json({ status: 400, message: 'Senha incorreta.' });
             }
            
