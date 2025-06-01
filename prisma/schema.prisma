@@ -80,7 +80,7 @@ model Property {
   area_built      Float
   frontage        Float
   furnished       Boolean
-  floor_number    String     @db.VarChar(10)
+  floor_number    Int
   tax_registration String    @db.VarChar(20)
   notes           String?
   created_at      DateTime   @default(now())

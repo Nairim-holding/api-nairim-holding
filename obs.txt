@@ -1,0 +1,3 @@
+fazer as rotas de show (trazer inidividualmente cada coisa)
+mensagem de autenticação no retorno de erro
+melhoramento das mensagens de erros
