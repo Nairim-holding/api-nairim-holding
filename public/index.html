@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Documentação da API | Nairim Holding</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+        }
+
+        h2{
+            color: #2c3e50;
+            text-align: start;
+            text-decoration: underline;
+        }
+
+        .endpoint-group {
+            background-color: #fff;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .endpoint-header {
+            display: flex;
+            align-items: center;
+            padding: 15px 20px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            font-weight: bold;
+            font-size: 1.1em;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .endpoint-header:hover {
+            background-color: #2980b9;
+        }
+
+        .endpoint-header .method {
+            padding: 4px 8px;
+            border-radius: 4px;
+            margin-right: 10px;
+            font-size: 0.9em;
+        }
+
+        .method.GET {
+            background-color: #2ecc71;
+        }
+
+        /* Verde */
+        .method.POST {
+            background-color: #cfbc16;
+        }
+
+        /* Laranja */
+        .method.PUT {
+            background-color: #37aefd;
+        }
+
+        /* Azul */
+        .method.DELETE {
+            background-color: #e74c3c;
+        }
+
+        /* Vermelho */
+        .method.PATCH {
+            background-color: #9b59b6;
+        }
+
+        /* Roxo */
+
+        .arrow {
+            margin-left: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .endpoint-group.active .arrow {
+            transform: rotate(90deg);
+        }
+
+        .endpoint-details {
+            padding: 15px 20px;
+            background-color: #f9f9f9;
+            border-top: 1px solid #eee;
+            display: none;
+            /* Esconde por padrão */
+        }
+
+        .endpoint-group.active .endpoint-details {
+            display: block;
+            /* Mostra quando ativo */
+        }
+
+        .endpoint-details h3 {
+            color: #34495e;
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 5px;
+        }
+
+        .endpoint-details p {
+            margin-bottom: 10px;
+        }
+
+        .endpoint-details pre {
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+
+        .endpoint-details table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        .endpoint-details th,
+        .endpoint-details td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .endpoint-details th {
+            background-color: #f2f2f2;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Documentação da API | Nairim Holding</h1>
+
+    <div class="endpoint-content">
+        <h2 class="title-endpoint">Usuarios</h2>
+
+        <div class="endpoint-group">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                /users
+                <span class="arrow">&#9658;</span>
+            </div>
+            <div class="endpoint-details">
+                <h3>Obter Detalhes dos Usuários</h3>
+                <p><strong>Descrição:</strong> Obtém uma lista de todos os usuarios cadastrados.</p>
+                <p><strong>URL Completa:</strong> <code>http://localhost:5000/users</code></p>
+
+                <h4>Exemplo de Resposta (Sucesso - HTTP 200 OK):</h4>
+                <pre><code class="language-json">
+[
+    {
+        "id": 1,
+        "name": "joaosilva",
+        "email": "joaosilva@gmail.com",
+        "password": "$2b$10$XxdoTkL4Y22xrPMBlxsu0e/nVxbVvBAFLJFLkjlTs3ITyL8YtvSt2",
+        "birth_date": "1990-05-10T00:00:00.000Z",
+        "gender": "MALE",
+        "role": "ADMIN",
+        "created_at": "2025-05-29T13:10:14.823Z",
+        "updated_at": "2025-05-29T13:12:42.237Z"
+    },
+    {
+        "id": 2,
+        "name": "joaosilva",
+        "email": "joaosilva@example.com",
+        "password": "$2b$10$XxdoTkL4Y22xrPMBlxsu0e/nVxbVvBAFLJFLkjlTs3ITyL8YtvSt2",
+        "birth_date": "1990-05-10T00:00:00.000Z",
+        "gender": "MALE",
+        "role": "ADMIN",
+        "created_at": "2025-05-29T13:10:14.823Z",
+        "updated_at": "2025-05-29T13:12:42.237Z"
+    },
+    ...
+]
+                </code></pre>
+
+                <h4>Exemplo de Resposta (Erro - HTTP 500 Not Found):</h4>
+                <pre><code class="language-json">
+{
+    "error": "Erro interno ao buscar usuários."
+}
+                    </code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint-group">
+            <div class="endpoint-header">
+                <span class="method GET">GET</span>
+                /users/{id}
+                <span class="arrow">&#9658;</span>
+            </div>
+            <div class="endpoint-details">
+                <h3>Obter Detalhes do Usuário</h3>
+                <p><strong>Descrição:</strong> Obtém os detalhes de um usuário específico pelo seu ID.</p>
+                <p><strong>URL Completa:</strong> <code>http://localhost:5000/users/{id}</code></p>
+
+                <h4>Parâmetros de URL:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Tipo</th>
+                            <th>Obrigatório</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>id</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>O ID único do usuário.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Exemplo de Resposta (Sucesso - HTTP 200 OK):</h4>
+                <pre><code class="language-json">
+{
+    "id": "a1b2c3d4e5f6",
+    "name": "João Silva",
+    "email": "joao@exemplo.com",
+    "createdAt": "2024-06-03T10:00:00Z"
+}
+                </code></pre>
+
+                <h4>Exemplo de Resposta (Erro - HTTP 404 Not Found):</h4>
+                <pre><code class="language-json">
+{
+    "error": "Usuário não encontrado"
+}
+                    </code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint-group">
+            <div class="endpoint-header">
+                <span class="method POST">POST</span>
+                /users
+                <span class="arrow">&#9658;</span>
+            </div>
+            <div class="endpoint-details">
+                <h3>Criar Novo Usuário</h3>
+                <p><strong>Descrição:</strong> Cria um novo registro de usuário no sistema.</p>
+                <p><strong>URL Completa:</strong> <code>http://localhost:5000/users</code></p>
+
+                <h4>Parâmetros de Requisição (Body - JSON):</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Tipo</th>
+                            <th>Obrigatório</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>name</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>O nome completo do usuário.</td>
+                        </tr>
+                        <tr>
+                            <td><code>email</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>O endereço de e-mail do usuário.</td>
+                        </tr>
+                        <tr>
+                            <td><code>password</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>A senha do usuário (mínimo 8 caracteres).</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Exemplo de Requisição:</h4>
+                <pre><code class="language-json">
+{
+    "name": "Novo Usuário Teste",
+    "email": "novo.usuario@teste.com",
+    "password": "senhaSegura123"
+}
+                    </code></pre>
+
+                <h4>Exemplo de Resposta (Sucesso - HTTP 201 Created):</h4>
+                <pre><code class="language-json">
+{
+    "id": "b7c8d9e0f1g2",
+    "name": "Novo Usuário Teste",
+    "email": "novo.usuario@teste.com",
+    "createdAt": "2024-06-03T14:30:00Z"
+}
+                </code></pre>
+
+                <h4>Exemplo de Resposta (Erro - HTTP 400 Bad Request):</h4>
+                <pre><code class="language-json">
+{
+    "error": "Dados de requisição inválidos",
+    "details": {
+        "email": "Formato de e-mail inválido"
+    }
+}
+                </code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint-group">
+            <div class="endpoint-header">
+                <span class="method PUT">PUT</span>
+                /users/{id}
+                <span class="arrow">&#9658;</span>
+            </div>
+            <div class="endpoint-details">
+                <h3>Atualizar Usuário Existente</h3>
+                <p><strong>Descrição:</strong> Atualiza os dados de um usuário existente pelo seu ID.</p>
+                <p><strong>URL Completa:</strong> <code>http://localhost:5000/users/{id}</code></p>
+
+                <h4>Parâmetros de URL:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Tipo</th>
+                            <th>Obrigatório</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>id</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>O ID único do usuário a ser atualizado.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Parâmetros de Requisição (Body - JSON):</h4>
+                <p>Envie apenas os campos que deseja atualizar.</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Tipo</th>
+                            <th>Obrigatório</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>name</code></td>
+                            <td><code>string</code></td>
+                            <td>Não</td>
+                            <td>Novo nome do usuário.</td>
+                        </tr>
+                        <tr>
+                            <td><code>email</code></td>
+                            <td><code>string</code></td>
+                            <td>Não</td>
+                            <td>Novo endereço de e-mail.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Exemplo de Requisição:</h4>
+                <pre><code class="language-json">
+{
+    "name": "João Atualizado"
+}
+                </code></pre>
+
+                <h4>Exemplo de Resposta (Sucesso - HTTP 200 OK):</h4>
+                <pre><code class="language-json">
+{
+    "id": "a1b2c3d4e5f6",
+    "name": "João Atualizado",
+    "email": "joao@exemplo.com",
+    "updatedAt": "2024-06-03T15:00:00Z"
+}
+                </code></pre>
+            </div>
+        </div>
+
+        <div class="endpoint-group">
+            <div class="endpoint-header">
+                <span class="method DELETE">DELETE</span>
+                /users/{id}
+                <span class="arrow">&#9658;</span>
+            </div>
+            <div class="endpoint-details">
+                <h3>Deletar Usuário</h3>
+                <p><strong>Descrição:</strong> Deleta um usuário específico pelo seu ID.</p>
+                <p><strong>URL Completa:</strong> <code>http://localhost:5000/users/{id}</code></p>
+
+                <h4>Parâmetros de URL:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Campo</th>
+                            <th>Tipo</th>
+                            <th>Obrigatório</th>
+                            <th>Descrição</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>id</code></td>
+                            <td><code>string</code></td>
+                            <td>Sim</td>
+                            <td>O ID único do usuário a ser deletado.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h4>Exemplo de Resposta (Sucesso - HTTP 204 No Content):</h4>
+                <pre><code>(Nenhuma resposta de corpo)</code></pre>
+
+                <h4>Exemplo de Resposta (Erro - HTTP 404 Not Found):</h4>
+                <pre><code class="language-json">
+{
+    "error": "Usuário não encontrado"
+}
+                </code></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const endpointHeaders = document.querySelectorAll('.endpoint-header');
+
+            endpointHeaders.forEach(header => {
+                header.addEventListener('click', () => {
+                    const parentGroup = header.closest('.endpoint-group');
+                    parentGroup.classList.toggle('active');
+                });
+            });
+        });
+    </script>
+
+</body>
+
+</html>
