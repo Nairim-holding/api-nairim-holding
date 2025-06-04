@@ -222,7 +222,7 @@
                     <tbody>
                         <tr>
                             <td><code>id</code></td>
-                            <td><code>string</code></td>
+                            <td><code>number</code></td>
                             <td>Sim</td>
                             <td>O ID único do usuário.</td>
                         </tr>
@@ -346,7 +346,7 @@
                     <tbody>
                         <tr>
                             <td><code>id</code></td>
-                            <td><code>string</code></td>
+                            <td><code>number</code></td>
                             <td>Sim</td>
                             <td>O ID único do usuário a ser atualizado.</td>
                         </tr>
@@ -442,6 +442,363 @@
             </div>
         </div>
     </div>
+
+    <h2 class="title-endpoint">Inquilinos</h2>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method GET">GET</span>
+        /tenants
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Listar Inquilinos</h3>
+        <p><strong>Descrição:</strong> Retorna uma lista de inquilinos cadastrados com seus contatos associados.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/tenants</code></p>
+
+        <h4>Exemplo de Resposta (Sucesso - HTTP 200 OK):</h4>
+        <pre><code class="language-json">
+[
+    {
+        "id": 1,
+        "name": "Empresa XPTO",
+        "internal_code": "TNT-001",
+        "occupation": "Comércio",
+        "contacts": [
+            {
+                "contact": {
+                    "phone": "11999999999",
+                    "email": "contato@empresa.com",
+                    "whatsapp": "11999999999"
+                }
+            }
+        ],
+        ...
+    }
+]
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method POST">POST</span>
+        /tenants
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Criar Inquilino</h3>
+        <p><strong>Descrição:</strong> Cria um novo inquilino com contatos associados.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/tenants</code></p>
+
+        <h4>Parâmetros de Requisição (Body - JSON):</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>tenant_name</code></td><td><code>string</code></td><td>Sim</td><td>Nome do inquilino.</td></tr>
+                <tr><td><code>tenant_internal_code</code></td><td><code>string</code></td><td>Não</td><td>Código interno identificador.</td></tr>
+                <tr><td><code>tenant_occupation</code></td><td><code>string</code></td><td>Não</td><td>Tipo de ocupação (ex: Comercial).</td></tr>
+                <tr><td><code>tenant_leases</code></td><td><code>array</code></td><td>Não</td><td>Lista de contratos (leases).</td></tr>
+                <tr><td><code>contacts</code></td><td><code>array</code></td><td>Não</td><td>Contatos vinculados ao inquilino.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Exemplo de Requisição:</h4>
+        <pre><code class="language-json">
+{
+    "tenant_name": "Empresa XPTO",
+    "tenant_internal_code": "TNT-001",
+    "tenant_occupation": "Comércio",
+    "contacts": [
+        {
+            "phone": "11999999999",
+            "email": "contato@empresa.com",
+            "whatsapp": "11999999999"
+        }
+    ]
+}
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method PUT">PUT</span>
+        /tenants/{id}
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Atualizar Inquilino</h3>
+        <p><strong>Descrição:</strong> Atualiza os dados de um inquilino pelo seu ID.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/tenants/{id}</code></p>
+
+        <h4>Parâmetros de URL:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>id</code></td><td><code>number</code></td><td>Sim</td><td>ID do inquilino.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Parâmetros de Requisição (Body - JSON):</h4>
+        <p>Envie apenas os campos que deseja atualizar.</p>
+        <pre><code class="language-json">
+{
+    "tenant_name": "Nome Atualizado",
+    "tenant_internal_code": "TNT-002",
+    "tenant_occupation": "Serviços"
+}
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method DELETE">DELETE</span>
+        /tenants/{id}
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Deletar Inquilino</h3>
+        <p><strong>Descrição:</strong> Remove um inquilino e todos os vínculos com contatos do banco de dados.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/tenants/{id}</code></p>
+
+        <h4>Parâmetros de URL:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>id</code></td><td><code>number</code></td><td>Sim</td><td>ID do inquilino a ser deletado.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Exemplo de Resposta (Sucesso - HTTP 204 No Content):</h4>
+        <pre><code>(Nenhuma resposta de corpo)</code></pre>
+    </div>
+</div>
+
+<h2 class="title-endpoint">Agências</h2>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method GET">GET</span>
+        /agencys
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Listar Agências</h3>
+        <p><strong>Descrição:</strong> Retorna uma lista de agências com seus respectivos contatos e endereços.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/agencys</code></p>
+
+        <h4>Exemplo de Resposta:</h4>
+        <pre><code class="language-json">
+[
+  {
+    "id": 1,
+    "trade_name": "Agência XPTO",
+    "legal_name": "Agência XPTO Ltda",
+    "cnpj": "00.000.000/0001-00",
+    "state_registration": "123456",
+    "municipal_registration": "654321",
+    "license_number": "78910",
+    "contacts": [
+      {
+        "contact": {
+          "phone": "11999999999",
+          "email": "contato@agencia.com",
+          "whatsapp": "11999999999"
+        }
+      }
+    ],
+    "addresses": [
+      {
+        "address": {
+          "zip_code": "12345-678",
+          "street": "Rua Exemplo",
+          "number": "123",
+          "district": "Centro",
+          "city": "São Paulo",
+          "state": "SP",
+          "country": "Brasil"
+        }
+      }
+    ]
+  }
+]
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method POST">POST</span>
+        /agencys
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Criar Agência</h3>
+        <p><strong>Descrição:</strong> Cria uma nova agência, incluindo contatos e endereços relacionados.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/agencys</code></p>
+
+        <h4>Parâmetros de Requisição (Body - JSON):</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>trade_name</code></td><td><code>string</code></td><td>Sim</td><td>Nome fantasia da agência.</td></tr>
+                <tr><td><code>legal_name</code></td><td><code>string</code></td><td>Sim</td><td>Razão social da agência.</td></tr>
+                <tr><td><code>cnpj</code></td><td><code>string</code></td><td>Sim</td><td>CNPJ da agência.</td></tr>
+                <tr><td><code>state_registration</code></td><td><code>string</code></td><td>Não</td><td>Inscrição estadual.</td></tr>
+                <tr><td><code>municipal_registration</code></td><td><code>string</code></td><td>Não</td><td>Inscrição municipal.</td></tr>
+                <tr><td><code>license_number</code></td><td><code>string</code></td><td>Não</td><td>Número da licença da agência.</td></tr>
+                <tr><td><code>contacts</code></td><td><code>array</code></td><td>Não</td><td>Contatos vinculados à agência.</td></tr>
+                <tr><td><code>addresses</code></td><td><code>array</code></td><td>Não</td><td>Endereços vinculados à agência.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Exemplo de Requisição:</h4>
+        <pre><code class="language-json">
+{
+  "trade_name": "Agência XPTO",
+  "legal_name": "Agência XPTO Ltda",
+  "cnpj": "00.000.000/0001-00",
+  "state_registration": "123456",
+  "municipal_registration": "654321",
+  "license_number": "78910",
+  "contacts": [
+    {
+      "phone": "11999999999",
+      "email": "contato@agencia.com",
+      "whatsapp": "11999999999"
+    }
+  ],
+  "addresses": [
+    {
+      "zip_code": "12345-678",
+      "street": "Rua Exemplo",
+      "number": "123",
+      "district": "Centro",
+      "city": "São Paulo",
+      "state": "SP",
+      "country": "Brasil"
+    }
+  ]
+}
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method PUT">PUT</span>
+        /agencys/{id}
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Atualizar Agência</h3>
+        <p><strong>Descrição:</strong> Atualiza os dados de uma agência específica e substitui os contatos e endereços existentes.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/agencys/{id}</code></p>
+
+        <h4>Parâmetros de URL:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>id</code></td><td><code>number</code></td><td>Sim</td><td>ID da agência a ser atualizada.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Exemplo de Requisição:</h4>
+        <pre><code class="language-json">
+{
+  "trade_name": "Agência Atualizada",
+  "legal_name": "Nova Razão Social Ltda",
+  "contacts": [
+    {
+      "phone": "11988888888",
+      "email": "novo@agencia.com",
+      "whatsapp": "11988888888"
+    }
+  ],
+  "addresses": [
+    {
+      "zip_code": "87654-321",
+      "street": "Avenida Nova",
+      "number": "321",
+      "district": "Jardins",
+      "city": "Rio de Janeiro",
+      "state": "RJ",
+      "country": "Brasil"
+    }
+  ]
+}
+        </code></pre>
+    </div>
+</div>
+
+<div class="endpoint-group">
+    <div class="endpoint-header">
+        <span class="method DELETE">DELETE</span>
+        /agencys/{id}
+        <span class="arrow">&#9658;</span>
+    </div>
+    <div class="endpoint-details">
+        <h3>Deletar Agência</h3>
+        <p><strong>Descrição:</strong> Remove uma agência e todos os vínculos com contatos e endereços.</p>
+        <p><strong>URL Completa:</strong> <code>http://localhost:5000/agencys/{id}</code></p>
+
+        <h4>Parâmetros de URL:</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>Campo</th>
+                    <th>Tipo</th>
+                    <th>Obrigatório</th>
+                    <th>Descrição</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><code>id</code></td><td><code>number</code></td><td>Sim</td><td>ID da agência.</td></tr>
+            </tbody>
+        </table>
+
+        <h4>Exemplo de Resposta (Sucesso - HTTP 204 No Content):</h4>
+        <pre><code>(Nenhuma resposta de corpo)</code></pre>
+    </div>
+</div>
+
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
