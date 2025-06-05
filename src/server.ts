@@ -11,9 +11,9 @@ export const app = express();
 app.use(cors());
 
 routes(app);
-const PORT = 8000;
+const PORT = process.env.PORT  || 8000;
 
-app.listen(PORT, () => {
+app.listen(PORT as number, '0.0.0.0', () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
 });
 
