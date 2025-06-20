@@ -13,6 +13,10 @@ export async function getPropertys() {
     });
 }
 
+export async function getPropertyById(id: number) {
+    return await prisma.property.findUnique({ where: { id: id }});
+}
+
 export async function createPropertys(data: any) {
   try {
     return await prisma.$transaction(async (tx) => {
@@ -88,11 +92,15 @@ export async function createPropertys(data: any) {
   }
 }
 
-export async function deletePropertys(id: number){
+export async function deletePropertys(id: number) {
   return await prisma.$transaction(async (tx) => {
+    await tx.document.deleteMany({ where: { property_id: id } });
     await tx.propertyAddress.deleteMany({ where: { property_id: id } });
+    await tx.favorite.deleteMany({ where: { property_id: id } });
+    await tx.lease.deleteMany({ where: { property_id: id } });
+    await tx.propertyValue.deleteMany({ where: { property_id: id } });
 
-    return await tx.property.delete({ where: { id } });
+    await tx.property.delete({ where: { id } });
   });
 }
 

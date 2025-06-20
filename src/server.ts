@@ -9,17 +9,10 @@ connectBD(prisma);
 
 export const app = express();
 app.use(cors());
-
-// app.use(express.static(path.resolve(__dirname, '../public')));
-
+app.use(express.static(path.join(__dirname,'..', 'public')));
 routes(app);
+const PORT = 5000;
 
-const PORT = process.env.PORT  || 5000;
-
-app.listen(PORT as number, '0.0.0.0', () => {
+app.listen(PORT, () => {
   console.log(`Servidor rodando em http://localhost:${PORT}`);
-});
-
-app.get('/', (req, res) => {
-  res.send('aaaaa')
 });
