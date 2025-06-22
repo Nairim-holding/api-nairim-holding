@@ -1,12 +1,11 @@
 import { Request, Response } from "express";
-import { getPropertys } from "../models/property";
-import { createPropertysType } from "../models/propertyType";
+import { createPropertysType, getPropertysType } from "../models/propertyType";
 
 export class PropertyTypeController {
 
     static async getPropertyType (req: Request, res: Response){
         try{
-            const propertysType = await getPropertys();
+            const propertysType = await getPropertysType();
             res.status(200).json(propertysType);
         } catch (error){
             res.status(500);

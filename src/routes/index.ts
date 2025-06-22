@@ -7,11 +7,14 @@ import tenant from './tenant';
 import owner from './owner';
 import lease from './lease';
 import favorite from './favorite';
-import propertyType from './propertyType'
-import propertyValues from './propertyValues'
+import propertyType from './propertyType';
+import propertyValues from './propertyValues';
+import cep from './cep';
 
 const routes = (app: Express) => {
-  app.use(express.json(), user, authenticate, agency, property, tenant, owner, lease, favorite, propertyType, propertyValues);
+  app.use(express.json(), user, authenticate, agency, property, tenant, owner, lease, favorite, propertyType, propertyValues, cep);
 };
+
+
 
 export default routes;

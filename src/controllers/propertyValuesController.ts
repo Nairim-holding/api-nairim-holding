@@ -15,7 +15,7 @@ export class PropertyValuesController {
     static async createPropertyValues (req: Request , res: Response) {
         try{
             const create = await createPropertysValue( req.body );
-            res.status(200).json({ status: 200, message: `O valor do imovel ${(await create).name} foi adicionado com sucesso!` });
+            res.status(200).json({ status: 200, message: `O valor do imovel ${(await create)} foi adicionado com sucesso!` });
         } catch (error) {
             res.status(500)
         }

@@ -1,4 +1,5 @@
 import prisma from "../../prisma/client";
+import verifyDate from "../utils/verifyDate";
 
 export async function getPropertys() {
     return prisma.property.findMany({
@@ -20,35 +21,77 @@ export async function getPropertyById(id: number) {
 export async function createPropertys(data: any) {
   try {
     return await prisma.$transaction(async (tx) => {
+
+    const parsed = JSON.parse(data.dataPropertys);
+    const parsedAddress = JSON.parse(data.addressProperty);
+    const parsedValuesProperty = JSON.parse(data.valuesProperty);
+    // const parsedMidias = JSON.parse(data.midiasProperty);
+
+    const {
+      title,
+      bedrooms,
+      bathrooms,
+      half_bathrooms,
+      garage_spaces,
+      floor_number,
+      area_total,
+      area_built,
+      frontage,
+      tax_registration,
+      furnished,
+      owner_id,
+      type_id
+    } = {
+      ...parsed,
+      bedrooms: +parsed.bedrooms,
+      bathrooms: +parsed.bathrooms,
+      half_bathrooms: +parsed.half_bathrooms,
+      garage_spaces: +parsed.garage_spaces,
+      floor_number: +parsed.floor_number,
+      area_total: +parsed.area_total,
+      area_built: +parsed.area_built,
+      frontage: +parsed.frontage,
+      owner_id: +parsed.owner_id,
+      type_id: +parsed.type_id,
+      furnished: parsed.furnished == 'true'
+    };
+
+    const { zip_code, street, number, district, city, state, country } = {...parsedAddress, number: +parsedAddress.number };
+
+    const { sale_rules, lease_rules, purchase_value, purchase_date, property_tax, rental_value, condo_fee, current_status, sale_value, sale_date, extra_charges } = 
+    {...parsedValuesProperty, purchase_value: +parsedValuesProperty.purchase_value, sale_value: +parsedValuesProperty.sale_value, rental_value: +parsedValuesProperty.rental_value, property_tax: +parsedValuesProperty.property_tax, condo_fee: +parsedValuesProperty.condo_fee, extra_charges: +parsedValuesProperty.extra_charges,
+    sale_date: verifyDate(parsedValuesProperty.sale_date), purchase_date: verifyDate(parsedValuesProperty.purchase_date)
+    };
+    
       const property = await tx.property.create({
         data: {
-          owner_id: data.owner_id,
-          type_id: data.type_id,
-          title: data.title,
-          bedrooms: data.bedrooms,
-          bathrooms: data.bathrooms,
-          half_bathrooms: data.half_bathrooms,
-          garage_spaces: data.garage_spaces,
-          area_total: data.area_total,
-          area_built: data.area_built,
-          frontage: data.frontage,
-          furnished: data.furnished,
-          floor_number: data.floor_number,
-          tax_registration: data.tax_registration,
-          notes: data.notes
+          owner_id,
+          type_id,
+          title,
+          bedrooms,
+          bathrooms,
+          half_bathrooms,
+          garage_spaces,
+          area_total,
+          area_built,
+          frontage,
+          furnished,
+          floor_number,
+          tax_registration,
+          notes: parsed.notes
         },
       });
 
-      for (const address of data.addresses ?? []) {
+      if(parsedAddress){
         const createdAddress = await tx.address.create({
           data: {
-            zip_code: address.zip_code,
-            street: address.street,
-            number: address.number,
-            district: address.district,
-            city: address.city,
-            state: address.state,
-            country: address.country,
+            zip_code,
+            street,
+            number,
+            district,
+            city,
+            state,
+            country,
           },
         });
 
@@ -59,28 +102,30 @@ export async function createPropertys(data: any) {
           },
         });
       }
+    
+      if (!sale_date || !purchase_date) {
+        throw new Error("Datas inválidas fornecidas. Verifique novamente!");
+      }
 
-      if (data.values && data.values.length > 0) {
-        const valuesToCreate = data.values.map((value: any) => ({
-            name: value.name,
-            purchase_value: value.purchase_value,
-            purchase_date: value.purchase_date ? new Date(value.purchase_date) : null,
-            sale_value: value.sale_value,
-            sale_date: value.sale_date ? new Date(value.sale_date) : null,
-            rental_value: value.rental_value,
-            property_tax: value.property_tax,
-            condo_fee: value.condo_fee,
-            extra_charges: value.extra_charges,
-            total: value.total,
-            current_status: value.current_status,
-            lease_rules: value.lease_rules,
-            sale_rules: value.sale_rules,
-            notes: value.notes,
-            property_id: property.id,
-        }));
-
+      if (parsedValuesProperty) {
+        const total = rental_value + property_tax + condo_fee + extra_charges;
         await tx.propertyValue.createMany({
-            data: valuesToCreate,
+          data: {
+            property_id: property.id,
+            total,
+            sale_rules,
+            sale_value,
+            lease_rules, 
+            purchase_value, 
+            current_status,
+            sale_date,
+            purchase_date,
+            condo_fee,
+            extra_charges,
+            notes: parsedValuesProperty.notes,
+            property_tax,
+            rental_value
+          },
         });
       }
 

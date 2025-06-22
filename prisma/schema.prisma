@@ -139,7 +139,7 @@ model Address {
   id         Int       @id @default(autoincrement())
   zip_code   String    @db.VarChar(10)
   street     String
-  number     String    @db.VarChar(10)
+  number     Int
   district   String    @db.VarChar(100)
   city       String    @db.VarChar(100)
   state      String    @db.VarChar(50)
@@ -258,7 +258,6 @@ model Lease {
 model PropertyValue {
   id                 Int         @id @default(autoincrement())
   property_id        Int
-  name               String
   purchase_value     Decimal     @db.Decimal(10,2)
   purchase_date      DateTime
   sale_value         Decimal     @db.Decimal(10,2)
