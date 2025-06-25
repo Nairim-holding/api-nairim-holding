@@ -9,7 +9,9 @@ export async function getPropertys() {
                 include: {
                     address: true
                 }
-            }
+            },
+            owner: true,
+            type: true
         }
     });
 }
@@ -21,11 +23,13 @@ export async function getPropertyById(id: number) {
 export async function createPropertys(data: any) {
   try {
     return await prisma.$transaction(async (tx) => {
-
+    console.log(data)
     const parsed = JSON.parse(data.dataPropertys);
     const parsedAddress = JSON.parse(data.addressProperty);
     const parsedValuesProperty = JSON.parse(data.valuesProperty);
     // const parsedMidias = JSON.parse(data.midiasProperty);
+
+    // console.log(data)
 
     const {
       title,
@@ -48,9 +52,9 @@ export async function createPropertys(data: any) {
       half_bathrooms: +parsed.half_bathrooms,
       garage_spaces: +parsed.garage_spaces,
       floor_number: +parsed.floor_number,
-      area_total: +parsed.area_total,
-      area_built: +parsed.area_built,
-      frontage: +parsed.frontage,
+      area_total: parseFloat(parsed.area_total),
+      area_built: parseFloat(parsed.area_built),
+      frontage: parseFloat(parsed.frontage),
       owner_id: +parsed.owner_id,
       type_id: +parsed.type_id,
       furnished: parsed.furnished == 'true'
@@ -59,7 +63,7 @@ export async function createPropertys(data: any) {
     const { zip_code, street, number, district, city, state, country } = {...parsedAddress, number: +parsedAddress.number };
 
     const { sale_rules, lease_rules, purchase_value, purchase_date, property_tax, rental_value, condo_fee, current_status, sale_value, sale_date, extra_charges } = 
-    {...parsedValuesProperty, purchase_value: +parsedValuesProperty.purchase_value, sale_value: +parsedValuesProperty.sale_value, rental_value: +parsedValuesProperty.rental_value, property_tax: +parsedValuesProperty.property_tax, condo_fee: +parsedValuesProperty.condo_fee, extra_charges: +parsedValuesProperty.extra_charges,
+    {...parsedValuesProperty, purchase_value: parseFloat(parsedValuesProperty.purchase_value), sale_value: parseFloat(parsedValuesProperty.sale_value), rental_value: parseFloat(parsedValuesProperty.rental_value), property_tax: parseFloat(parsedValuesProperty.property_tax), condo_fee: parseFloat(parsedValuesProperty.condo_fee), extra_charges: parseFloat(parsedValuesProperty.extra_charges),
     sale_date: verifyDate(parsedValuesProperty.sale_date), purchase_date: verifyDate(parsedValuesProperty.purchase_date)
     };
     

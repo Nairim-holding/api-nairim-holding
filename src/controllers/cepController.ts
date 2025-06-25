@@ -3,7 +3,6 @@ import { Request, Response } from 'express';
 export class CepController {
   static async getCep(req: Request, res: Response): Promise<any> {
     const originalCep = req.params.cep;
-
     try {
       const response = await fetch(`https://viacep.com.br/ws/${originalCep}/json/`);
 
