@@ -17,7 +17,19 @@ export async function getPropertys() {
 }
 
 export async function getPropertyById(id: number) {
-    return await prisma.property.findUnique({ where: { id: id }});
+  return await prisma.property.findUnique({
+    where: { id: id },
+    include: {
+      values: true,
+      addresses: {
+        include: {
+          address: true,
+        },
+      },
+      owner: true,
+      type: true,
+    },
+  });
 }
 
 export async function createPropertys(data: any) {

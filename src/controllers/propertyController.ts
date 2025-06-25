@@ -11,6 +11,16 @@ export class PropertyController {
     }
   }
 
+  static async getPropertyById(req: Request, res: Response) {
+    const { id } = req.params;
+    try {
+      const agency = await getPropertyById(+id);
+      res.status(200).json(agency);
+    } catch (error) {
+      res.status(500);
+    }
+  }
+
   static async createProperty(req: Request, res: Response): Promise<any> {
     try {
       const create = await createPropertys(req.body);
