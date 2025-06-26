@@ -3,8 +3,10 @@ import { createPropertys, deletePropertys, getPropertyById, getPropertys, update
 import { Prisma } from "@prisma/client";
 export class PropertyController {
   static async getProperty(req: Request, res: Response) {
+    const limit = req.query.limit as string;
+    const search = req.query.search as string;
     try {
-      const agencys = await getPropertys();
+      const agencys = await getPropertys(limit, search);
       res.status(200).json(agencys);
     } catch (error) {
       res.status(500);
