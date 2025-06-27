@@ -259,18 +259,18 @@ model PropertyValue {
   id                 Int         @id @default(autoincrement())
   property_id        Int
   purchase_value     Decimal     @db.Decimal(10,2)
-  purchase_date      DateTime
-  sale_value         Decimal     @db.Decimal(10,2)
-  sale_date          DateTime
+  purchase_date      DateTime    
+  sale_value         Decimal?     @db.Decimal(10,2)
+  sale_date          DateTime?
   rental_value       Decimal     @db.Decimal(10,2)
   property_tax       Decimal     @db.Decimal(10,2)
   condo_fee          Decimal     @db.Decimal(10,2)
-  extra_charges      Decimal     @db.Decimal(10,2)
+  extra_charges      Decimal?     @db.Decimal(10,2)
   total              Decimal     @db.Decimal(10,2)
   current_status     PropertyStatus
-  lease_rules        String      @db.VarChar(100)
-  sale_rules         String      @db.VarChar(100)
-  notes              String      @db.VarChar(100)
+  lease_rules        String?      @db.VarChar(100)
+  sale_rules         String?      @db.VarChar(100)
+  notes              String?     @db.VarChar(100)
 
   property           Property    @relation(fields: [property_id], references: [id])
 }

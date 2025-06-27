@@ -147,11 +147,11 @@ export async function createPropertys(data: any) {
       } = {
         ...parsedValuesProperty,
         purchase_value: parseFloat(parsedValuesProperty.purchase_value),
-        sale_value: parseFloat(parsedValuesProperty.sale_value),
+        sale_value: parseFloat(parsedValuesProperty.sale_value) || 0,
         rental_value: parseFloat(parsedValuesProperty.rental_value),
         property_tax: parseFloat(parsedValuesProperty.property_tax),
         condo_fee: parseFloat(parsedValuesProperty.condo_fee),
-        extra_charges: parseFloat(parsedValuesProperty.extra_charges),
+        extra_charges: parseFloat(parsedValuesProperty.extra_charges) || 0,
         sale_date: verifyDate(parsedValuesProperty.sale_date),
         purchase_date: verifyDate(parsedValuesProperty.purchase_date),
       };
@@ -196,7 +196,7 @@ export async function createPropertys(data: any) {
         });
       }
 
-      if (!sale_date || !purchase_date) {
+      if (!purchase_date) {
         throw new Error("Datas inválidas fornecidas. Verifique novamente!");
       }
 

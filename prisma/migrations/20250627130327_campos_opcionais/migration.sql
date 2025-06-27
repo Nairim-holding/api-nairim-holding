@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE "PropertyValue" ALTER COLUMN "sale_value" DROP NOT NULL,
+ALTER COLUMN "sale_date" DROP NOT NULL,
+ALTER COLUMN "extra_charges" DROP NOT NULL,
+ALTER COLUMN "lease_rules" DROP NOT NULL,
+ALTER COLUMN "sale_rules" DROP NOT NULL,
+ALTER COLUMN "notes" DROP NOT NULL;
