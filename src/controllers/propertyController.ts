@@ -3,13 +3,15 @@ import { createPropertys, deletePropertys, getPropertyById, getPropertys, update
 import { Prisma } from "@prisma/client";
 export class PropertyController {
   static async getProperty(req: Request, res: Response) {
-    const limit = req.query.limit as string;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
+
     try {
-      const agencys = await getPropertys(limit, search);
+      const agencys = await getPropertys(limit, page, search);
       res.status(200).json(agencys);
     } catch (error) {
-      res.status(500);
+      res.status(500).json({ message: 'Internal server error' });
     }
   }
 

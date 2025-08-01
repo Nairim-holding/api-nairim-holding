@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import prisma from "../../prisma/client";
 import verifyDate from "../utils/verifyDate";
 
-export async function getPropertys(limit?: string, search?: string) {
+export async function getPropertys(limit = 10, page = 1, search?: string) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
   const whereClause = search
@@ -49,6 +49,8 @@ export async function getPropertys(limit?: string, search?: string) {
       }
     : {};
 
+  const skip = (page - 1) * limit;
+
   const data = await prisma.property.findMany({
     where: whereClause,
     include: {
@@ -61,13 +63,17 @@ export async function getPropertys(limit?: string, search?: string) {
       owner: true,
       type: true,
     },
-    take: limit ? +limit : 10,
+    skip,
+    take: limit,
   });
-  const count = await prisma.property.count({ where: whereClause, take: limit ? +limit : 10 });
+
+  const count = await prisma.property.count({ where: whereClause });
 
   return {
     data,
     count,
+    totalPages: Math.ceil(count / limit),
+    currentPage: page,
   };
 }
 

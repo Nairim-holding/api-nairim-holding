@@ -46,4 +46,9 @@ export class AuthenticateController {
             return res.status(401).json({ status: 401, message: 'Token invalido' });
         }
     }
+
+    static async logout(req: Request, res: Response): Promise<any> {
+        res.clearCookie('token'); 
+        return res.status(200).json({ status: 200, message: 'Logout realizado com sucesso.' });
+    }
 }
