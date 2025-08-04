@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { createPropertys, deletePropertys, getPropertyById, getPropertys, updatePropertys } from "../models/property";
 import { Prisma } from "@prisma/client";
+import prisma from "../../prisma/client";
+import path from "path";
 export class PropertyController {
   static async getProperty(req: Request, res: Response) {
     const limit = parseInt(req.query.limit as string) || 10;
@@ -33,6 +35,7 @@ export class PropertyController {
         .json({
           status: 200,
           message: `O imóvel ${(await create).title} foi criado com sucesso!`,
+          id: create.id,
         });
     } catch (error: any) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -68,6 +71,62 @@ export class PropertyController {
             status: 500,
             message: 'Erro interno ao criar o imóvel. Tente novamente mais tarde.'
         });
+    }
+  }
+
+  static async createMidias(req: Request, res: Response): Promise<any> {
+    try {
+      const propertyId = Number(req.params.id);
+      const userId = Number(req.body.userId); 
+      if (!propertyId) {
+        return res.status(400).json({ message: "ID do imóvel inválido" });
+      }
+
+      if (!req.files || Object.keys(req.files).length === 0) {
+        return res.status(400).json({ message: "Nenhum arquivo enviado" });
+      }
+
+      const files = req.files as Record<string, Express.Multer.File[]>;
+      const savedDocuments = [];
+
+      const baseUrl = process.env.BASE_URL || "http://localhost:5000/uploads";
+
+      for (const key in files) {
+        for (const file of files[key]) {
+          const relativePath = path.relative(
+            path.join(__dirname, "../../uploads"),
+            file.path
+          );
+
+          const fileUrl = `${baseUrl}/${relativePath.replace(/\\/g, "/")}`;
+
+          const created = await prisma.document.create({
+            data: {
+              property_id: propertyId,
+              file_path: fileUrl,
+              file_type: file.mimetype,
+              description: key,
+              type:
+                key === "arquivosMatricula"
+                  ? "REGISTRATION"
+                  : key === "arquivosEscritura"
+                  ? "TITLE_DEED"
+                  : "OTHER",
+              created_by: userId || 1,
+            },
+          });
+
+          savedDocuments.push(created);
+        }
+      }
+
+      return res.status(200).json({
+        message: "Mídias cadastradas com sucesso!",
+        documents: savedDocuments,
+      });
+    } catch (error) {
+      console.error("Erro no upload de mídias:", error);
+      return res.status(500).json({ message: "Erro ao enviar mídias" });
     }
   }
 

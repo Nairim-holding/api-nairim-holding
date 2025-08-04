@@ -89,6 +89,7 @@ export async function getPropertyById(id: number) {
       },
       owner: true,
       type: true,
+      documents: true
     },
   });
 }
@@ -96,13 +97,9 @@ export async function getPropertyById(id: number) {
 export async function createPropertys(data: any) {
   try {
     return await prisma.$transaction(async (tx) => {
-      console.log(data);
       const parsed = JSON.parse(data.dataPropertys);
       const parsedAddress = JSON.parse(data.addressProperty);
       const parsedValuesProperty = JSON.parse(data.valuesProperty);
-      // const parsedMidias = JSON.parse(data.midiasProperty);
-
-      // console.log(data)
 
       const {
         title,

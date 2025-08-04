@@ -21,7 +21,7 @@ export class AuthenticateController {
             }
            
             const secretKey = process.env.JWT_SECRET_KEY as string;
-            const payload = { name: user.name, email: user.email, role: 'administrador' };
+            const payload = { id: user.id, name: user.name, email: user.email, role: 'administrador' };
             const token = jwt.sign(payload, secretKey, { expiresIn: '1h' });
 
             return res.status(200).json({ status: 200, message: `Login realizado com sucesso!`, token });
