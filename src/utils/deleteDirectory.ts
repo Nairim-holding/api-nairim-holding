@@ -1,0 +1,18 @@
+import fs from "fs";
+import path from "path";
+
+export default function deleteFolderRecursive(folderPath: string) {
+  if (fs.existsSync(folderPath)) {
+    fs.readdirSync(folderPath).forEach((file) => {
+      const curPath = path.join(folderPath, file);
+      if (fs.lstatSync(curPath).isDirectory()) {
+        deleteFolderRecursive(curPath);
+      } else {
+        fs.unlinkSync(curPath);
+      }
+    });
+    fs.rmdirSync(folderPath);
+  } else {
+    console.warn(`Pasta não encontrada: ${folderPath}`);
+  }
+}
