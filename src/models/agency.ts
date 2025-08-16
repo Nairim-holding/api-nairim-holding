@@ -1,21 +1,68 @@
 import prisma from "../../prisma/client";
+import { Prisma } from "@prisma/client";
 
-export async function getAgencys() {
-  return prisma.agency.findMany({
-    include: {
-      addresses: {
-        include: {
-          address: true
-        }
-      },
-      contacts: {
-        include: {
-          contact: true
-        }
-      }
-    }
-  });
+export async function getAgencys(limit = 10, page = 1, search?: string) {
+  const insensitiveMode: Prisma.QueryMode = "insensitive";
+
+  let whereClause: Prisma.AgencyWhereInput = {};
+
+  if (search) {
+    const normalized = search.trim();
+
+    whereClause = {
+      OR: [
+        { trade_name: { contains: normalized, mode: insensitiveMode } },
+        { legal_name: { contains: normalized, mode: insensitiveMode } },
+        { cnpj: { contains: normalized, mode: insensitiveMode } },
+        { license_number: { contains: normalized, mode: insensitiveMode } },
+        // Se o search for um número, tenta bater com state_registration e municipal_registration
+        ...(Number(normalized)
+          ? [
+              { state_registration: { equals: Number(normalized) } },
+              { municipal_registration: { equals: Number(normalized) } },
+            ]
+          : []),
+      ],
+    };
+  }
+
+  const take = limit > 0 ? limit : 10;
+  const skip = (page - 1) * take;
+
+  try {
+    const [data, count] = await Promise.all([
+      prisma.agency.findMany({
+        where: whereClause,
+        skip,
+        take,
+        orderBy: { created_at: "desc" },
+        select: {
+          id: true,
+          trade_name: true,
+          legal_name: true,
+          cnpj: true,
+          state_registration: true,
+          municipal_registration: true,
+          license_number: true,
+          created_at: true,
+          updated_at: true,
+        },
+      }),
+      prisma.agency.count({ where: whereClause }),
+    ]);
+
+    return {
+      data: data || [],
+      count: count || 0,
+      totalPages: count ? Math.ceil(count / take) : 0,
+      currentPage: page,
+    };
+  } catch (error) {
+    console.error("Erro no getAgencies:", error);
+    throw new Error("Erro ao buscar agencies.");
+  }
 }
+
 
 export async function createAgencys(data: any) {
     return await prisma.$transaction(async (tx) => {

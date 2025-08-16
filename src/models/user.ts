@@ -8,19 +8,15 @@ export async function getUsers(limit = 10, page = 1, search?: string) {
 
   if (search) {
     const normalized = search.toUpperCase().trim();
-
-    // Cria a lista de filtros
     const orFilters: Prisma.UserWhereInput["OR"] = [
       { name: { contains: search, mode: insensitiveMode } },
       { email: { contains: search, mode: insensitiveMode } },
     ];
 
-    // Só adiciona gender se for valor válido do enum
     if (Object.values(Gender).includes(normalized as Gender)) {
       orFilters.push({ gender: { equals: normalized as Gender } });
     }
 
-    // Só adiciona role se for valor válido do enum
     if (Object.values(Role).includes(normalized as Role)) {
       orFilters.push({ role: { equals: normalized as Role } });
     }
@@ -28,7 +24,6 @@ export async function getUsers(limit = 10, page = 1, search?: string) {
     whereClause = { OR: orFilters };
   }
 
-  // Garantir paginação mínima
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
 
@@ -54,14 +49,14 @@ export async function getUsers(limit = 10, page = 1, search?: string) {
     ]);
 
     return {
-      data,
-      count,
-      totalPages: Math.ceil(count / take),
+      data: data || [],
+      count: count || 0,
+      totalPages: count ? Math.ceil(count / take) : 0,
       currentPage: page,
     };
   } catch (error) {
     console.error("Erro no getUsers:", error);
-    throw new Error("Erro ao buscar usuários."); // vai cair no catch do controller
+    throw new Error("Erro ao buscar usuários.");
   }
 }
 
