@@ -5,7 +5,7 @@ import connectBD from "./config/db";
 import cors from 'cors';
 import path from "path";
 
-// connectBD(prisma);
+connectBD(prisma);
 
 export const app = express();
 app.use(cors());
