@@ -5,11 +5,15 @@ import bcrypt from 'bcrypt';
 export class UserController {
 
     static async getUser(req: Request, res: Response) {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const page = parseInt(req.query.page as string) || 1;
+        const search = req.query.search as string;
+
         try {
-            const users = await getUsers();
+            const users = await getUsers(limit, page, search);
             res.status(200).json(users);
         } catch (error) {
-            res.status(500).json({ error: "Erro interno ao buscar usuários." });
+            res.status(500).json({ message: 'Internal server error' });
         }
     }
 
