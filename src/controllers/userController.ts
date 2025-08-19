@@ -37,11 +37,7 @@ export class UserController {
             res.status(200).json({ status: 200, message: `O Administrador ${create.name} foi criado com sucesso!` });
         } catch (error) {
             console.log(error)
-<<<<<<< HEAD
             res.status(500).json({ error: `Erro interno ao criar usuário: ${error}` });
-=======
-            res.status(500).json({ error: `Erro interno ao criar Administrador: ${error}` });
->>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
         }
     }
 
@@ -63,11 +59,7 @@ export class UserController {
         const userById = await getUserById(+id);
         try {
             await deleteUsers(Number(id));
-<<<<<<< HEAD
             res.status(200).json({ status: 200, message: `Usuário ${userById?.name} foi deletado com sucesso.` });
-=======
-            res.status(200).json({ status: 200, message: `Administrador ${userById?.name} foi deletado com sucesso.` });
->>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
         } catch (error) {
             res.status(500).json({ error: `Erro ao deletar Administrador: ${error}` });
         }

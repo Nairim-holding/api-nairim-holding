@@ -15,7 +15,6 @@ export class TenantController {
                 res.status(500).json({ message: 'Internal server error' });
             }
         }
-<<<<<<< HEAD
 
     static async getTenantsById(req: Request, res: Response) {
         const { id } = req.params;
@@ -26,8 +25,6 @@ export class TenantController {
           res.status(500);
         }
       }
-=======
->>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
 
     static async createTenant (req: Request , res: Response) {
         try{
