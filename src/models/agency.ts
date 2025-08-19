@@ -61,6 +61,7 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
     console.error("Erro no getAgencies:", error);
     throw new Error("Erro ao buscar agencies.");
   }
+<<<<<<< HEAD
 }
 
 export async function getAgencysById(id: number) {
@@ -83,6 +84,11 @@ export async function getAgencysById(id: number) {
 
 
 
+=======
+}
+
+
+>>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
 export async function createAgencys(data: any) {
     return await prisma.$transaction(async (tx) => {
         const agency = await tx.agency.create({

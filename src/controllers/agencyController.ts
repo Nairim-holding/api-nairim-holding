@@ -15,6 +15,7 @@ export class AgencyController {
                     res.status(500).json({ message: 'Internal server error' });
                 }
             }
+<<<<<<< HEAD
 
     static async getAgencysById(req: Request, res: Response) {
         const { id } = req.params;
@@ -25,6 +26,8 @@ export class AgencyController {
           res.status(500);
         }
       }
+=======
+>>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
 
     static async createAgency(req: Request, res: Response) {
         try {

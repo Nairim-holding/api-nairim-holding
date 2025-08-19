@@ -51,6 +51,7 @@ export async function getTenants(limit = 10, page = 1, search?: string) {
     console.error("Erro no getTenants:", error);
     throw new Error("Erro ao buscar tenants.");
   }
+<<<<<<< HEAD
 }
 
 export async function getTenantsById(id: number) {
@@ -69,6 +70,11 @@ export async function getTenantsById(id: number) {
 
 
 
+=======
+}
+
+
+>>>>>>> 95af1e3668b3a617bc7d1981eeeebe381d704676
 export async function createTenants(data: any) {
     return await prisma.$transaction(async (tx) => {
     const tenant = await prisma.tenant.create({
