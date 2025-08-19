@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createOwners, deleteOwners, getOwners, updateOwner } from "../models/owner";
+import { createOwners, deleteOwners, getOwnerById, getOwners, updateOwner } from "../models/owner";
 
 export class OwnerController {
 
@@ -11,6 +11,16 @@ export class OwnerController {
             res.status(500);
         }
     }
+
+    static async getOwnerById(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+          const owner = await getOwnerById(+id);
+          res.status(200).json(owner);
+        } catch (error) {
+          res.status(500);
+        }
+      }
 
     static async createOwner (req: Request , res: Response) {
         try{

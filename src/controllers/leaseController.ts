@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createLeases, getLeases } from "../models/lease";
+import { createLeases, getLeases, getLeasesById } from "../models/lease";
 
 export class LeaseController {
 
@@ -11,6 +11,16 @@ export class LeaseController {
             res.status(500);
         }
     }
+
+    static async getLeasesById(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+          const leases = await getLeasesById(+id);
+          res.status(200).json(leases);
+        } catch (error) {
+          res.status(500);
+        }
+      }
 
     static async createLease (req: Request , res: Response) {
         try{

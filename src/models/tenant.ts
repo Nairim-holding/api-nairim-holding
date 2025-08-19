@@ -1,18 +1,73 @@
 import prisma from "../../prisma/client";
+import { Prisma } from "@prisma/client";
 
-export async function getTenants(){
-    return prisma.tenant.findMany({
-    include:{
+export async function getTenants(limit = 10, page = 1, search?: string) {
+  const insensitiveMode: Prisma.QueryMode = "insensitive";
+
+  let whereClause: Prisma.TenantWhereInput = {};
+
+  if (search) {
+    const normalized = search.trim();
+
+    whereClause = {
+      OR: [
+        { name: { contains: normalized, mode: insensitiveMode } },
+        { occupation: { contains: normalized, mode: insensitiveMode } },
+        // Se o search for um número, tenta bater com internal_code
+        ...(Number(normalized)
+          ? [{ internal_code: { equals: Number(normalized) } }]
+          : []),
+      ],
+    };
+  }
+
+  const take = limit > 0 ? limit : 10;
+  const skip = (page - 1) * take;
+
+  try {
+    const [data, count] = await Promise.all([
+      prisma.tenant.findMany({
+        where: whereClause,
+        skip,
+        take,
+        orderBy: { id: "desc" },
+        select: {
+          id: true,
+          name: true,
+          internal_code: true,
+          occupation: true,
+        },
+      }),
+      prisma.tenant.count({ where: whereClause }),
+    ]);
+
+    return {
+      data: data || [],
+      count: count || 0,
+      totalPages: count ? Math.ceil(count / take) : 0,
+      currentPage: page,
+    };
+  } catch (error) {
+    console.error("Erro no getTenants:", error);
+    throw new Error("Erro ao buscar tenants.");
+  }
+}
+
+export async function getTenantsById(id: number) {
+  return await prisma.tenant.findUnique({
+    where: { id },
+    include: {
+      leases: true,
       contacts: {
         include: {
-          contact: true
-        }
-      }
-    }
+          contact: true,
+        },
+      },
+    },
   });
-   
-    
 }
+
+
 
 export async function createTenants(data: any) {
     return await prisma.$transaction(async (tx) => {

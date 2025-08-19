@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma/client";
 import verifyDate from "../utils/verifyDate";
+import fs from "fs";
+import path from "path";
+import deleteFolderRecursive from "../utils/deleteDirectory";
 
 export async function getPropertys(limit = 10, page = 1, search?: string) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
@@ -235,6 +238,13 @@ export async function createPropertys(data: any) {
 
 export async function deletePropertys(id: number) {
   return await prisma.$transaction(async (tx) => {
+    const documents = await tx.document.findMany({
+      where: { property_id: id },
+    });
+
+    const propertyFolder = path.join(__dirname, "..", "..", "uploads", id.toString());
+    deleteFolderRecursive(propertyFolder);
+
     await tx.document.deleteMany({ where: { property_id: id } });
     await tx.propertyAddress.deleteMany({ where: { property_id: id } });
     await tx.favorite.deleteMany({ where: { property_id: id } });
@@ -310,9 +320,9 @@ export async function updatePropertys(id: number, data: any) {
         purchase_date: verifyDate(parsedValuesProperty.purchase_date),
       };
 
-      if (!sale_date || !purchase_date) {
-        throw new Error("Datas inválidas fornecidas. Verifique novamente!");
-      }
+      // if (!sale_date || !purchase_date) {
+      //   throw new Error("Datas inválidas fornecidas. Verifique novamente!");
+      // }
 
       const updatedProperty = await tx.property.update({
         where: { id },

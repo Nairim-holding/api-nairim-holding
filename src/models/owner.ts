@@ -17,6 +17,27 @@ export async function getOwners(){
     });
 }
 
+export async function getOwnerById(id: number) {
+  return await prisma.owner.findUnique({
+    where: { id },
+    include: {
+      properties: true,
+      leases: true,
+      addresses: {
+        include: {
+          address: true,
+        },
+      },
+      contacts: {
+        include: {
+          contact: true,
+        },
+      },
+    },
+  });
+}
+
+
 export async function createOwners(data: any) {
     return await prisma.$transaction(async (tx) => {
         const owner = await tx.owner.create({ 

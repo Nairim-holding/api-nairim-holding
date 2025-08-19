@@ -17,6 +17,16 @@ router.post(
   ]),
   PropertyController.createMidias
 );
+router.put(
+  "/property/:id/upload",
+  upload.fields([
+    { name: "arquivosImagens" },
+    { name: "arquivosMatricula" },
+    { name: "arquivosRegistro" },
+    { name: "arquivosEscritura" }
+  ]),
+  PropertyController.updateMidias
+);
 router.put("/property/:id", PropertyController.updateProperty)
 router.delete("/property/:id", PropertyController.deleteProperty);
 

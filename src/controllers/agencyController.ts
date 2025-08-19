@@ -1,16 +1,30 @@
 import { Request, Response } from "express";
-import { createAgencys, deleteAgencys, getAgencys, updateAgency } from "../models/agency";
+import { createAgencys, deleteAgencys, getAgencys, getAgencysById, updateAgency } from "../models/agency";
 
 export class AgencyController {
 
     static async getAgency(req: Request, res: Response) {
+                const limit = parseInt(req.query.limit as string) || 10;
+                const page = parseInt(req.query.page as string) || 1;
+                const search = req.query.search as string;
+        
+                try {
+                    const agencys = await getAgencys(limit, page, search);
+                    res.status(200).json(agencys);
+                } catch (error) {
+                    res.status(500).json({ message: 'Internal server error' });
+                }
+            }
+
+    static async getAgencysById(req: Request, res: Response) {
+        const { id } = req.params;
         try {
-            const agencys = await getAgencys();
-            res.status(200).json(agencys);
+          const agencys = await getAgencysById(+id);
+          res.status(200).json(agencys);
         } catch (error) {
-            res.status(500).json({ error: "Erro ao buscar agências" });
+          res.status(500);
         }
-    }
+      }
 
     static async createAgency(req: Request, res: Response) {
         try {

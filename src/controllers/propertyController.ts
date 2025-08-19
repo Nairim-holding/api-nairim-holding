@@ -2,7 +2,9 @@ import { Request, Response } from "express";
 import { createPropertys, deletePropertys, getPropertyById, getPropertys, updatePropertys } from "../models/property";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma/client";
+import fs from "fs";
 import path from "path";
+
 export class PropertyController {
   static async getProperty(req: Request, res: Response) {
     const limit = parseInt(req.query.limit as string) || 10;
@@ -142,6 +144,90 @@ export class PropertyController {
         });
     } catch (error) {
       res.status(500).json({ error: "Erro ao atualizar imovel" });
+    }
+  }
+
+  static async updateMidias(req: Request, res: Response): Promise<any> {
+    try {
+      const propertyId = Number(req.params.id);
+      const userId = Number(req.body.userId);
+
+      if (!propertyId) {
+        return res.status(400).json({ message: "ID do imóvel inválido" });
+      }
+
+      const files = req.files as Record<string, Express.Multer.File[]>;
+      const baseUrl = process.env.BASE_URL || "http://localhost:5000/uploads";
+      const uploadDir = path.join(__dirname, "../../uploads");
+
+      const savedDocuments = [];
+
+      const existingDocuments = await prisma.document.findMany({
+        where: {
+          property_id: propertyId,
+        },
+      });
+
+      const existingFilePaths = new Set(
+        existingDocuments.map((doc) => doc.file_path)
+      );
+
+      const newFilePaths: string[] = [];
+
+      if (files && Object.keys(files).length > 0) {
+        for (const key in files) {
+          for (const file of files[key]) {
+            const relativePath = path.relative(uploadDir, file.path);
+            const fileUrl = `${baseUrl}/${relativePath.replace(/\\/g, "/")}`;
+            newFilePaths.push(fileUrl);
+
+            if (!existingFilePaths.has(fileUrl)) {
+              const created = await prisma.document.create({
+                data: {
+                  property_id: propertyId,
+                  file_path: fileUrl,
+                  file_type: file.mimetype,
+                  description: key,
+                  type:
+                    key === "arquivosMatricula"
+                      ? "REGISTRATION"
+                      : key === "arquivosEscritura"
+                      ? "TITLE_DEED"
+                      : "OTHER",
+                  created_by: userId || 1,
+                },
+              });
+
+              savedDocuments.push(created);
+            }
+          }
+        }
+      }
+
+      const toDelete = existingDocuments.filter(
+        (doc) => !newFilePaths.includes(doc.file_path)
+      );
+
+      for (const doc of toDelete) {
+        await prisma.document.delete({ where: { id: doc.id } });
+
+        const absoluteFilePath = path.join(
+          uploadDir,
+          doc.file_path.replace(`${baseUrl}/`, "")
+        );
+
+        if (fs.existsSync(absoluteFilePath)) {
+          fs.unlinkSync(absoluteFilePath);
+        }
+      }
+
+      return res.status(200).json({
+        message: "Mídias atualizadas com sucesso!",
+        documents: savedDocuments,
+      });
+    } catch (error) {
+      console.error("Erro ao editar mídias:", error);
+      return res.status(500).json({ message: "Erro ao editar mídias" });
     }
   }
 
