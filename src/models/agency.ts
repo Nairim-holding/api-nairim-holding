@@ -44,6 +44,16 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
           state_registration: true,
           municipal_registration: true,
           license_number: true,
+          addresses: {
+            include: {
+              address: true
+            }
+          },
+          contacts: {
+            include: {
+              contact: true
+            }
+          },
           created_at: true,
           updated_at: true,
         },
@@ -99,9 +109,11 @@ export async function createAgencys(data: any) {
         for (const contact of data.contacts ?? []) {
             const createdContact = await tx.contact.create({
                 data: {
-                phone: contact.phone,
-                email: contact.email,
-                whatsapp: contact.whatsapp,
+                  contact: contact.contact,
+                  telephone: contact.telephone,
+                  phone: contact.phone,
+                  email: contact.email,
+                  whatsapp: contact.whatsapp,
                 },
             });
 
@@ -167,6 +179,8 @@ export async function updateAgency(id: number, data: any) {
       for (const contact of data.contacts) {
         const createdContact = await tx.contact.create({
           data: {
+            contact: contact.contact,
+            telephone: contact.telephone,
             phone: contact.phone,
             email: contact.email,
             whatsapp: contact.whatsapp,

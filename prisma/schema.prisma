@@ -154,6 +154,8 @@ model Address {
 
 model Contact {
   id         Int       @id @default(autoincrement())
+  contact    String    @db.VarChar(100)
+  telephone  String    @db.VarChar(20)
   phone      String    @db.VarChar(20)
   email      String
   whatsapp   Boolean

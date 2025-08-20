@@ -65,6 +65,7 @@ export async function getPropertys(limit = 10, page = 1, search?: string) {
       },
       owner: true,
       type: true,
+      documents: true,
     },
     skip,
     take: limit,
