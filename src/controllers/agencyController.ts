@@ -31,7 +31,7 @@ export class AgencyController {
             const create = await createAgencys(req.body);
             res.status(200).json({ status: 200, message: `A ${create.legal_name} foi criada com sucesso!` });
         } catch (error) {
-            res.status(500).json({ error: "Erro ao criar agência" });
+            res.status(500).json({ error: `Erro ao criar agência: ${error}` });
         }
     }
 
@@ -41,15 +41,16 @@ export class AgencyController {
             const updated = await updateAgency(Number(id), req.body);
             res.status(200).json({ status: 200,message: `A agência ${updated.legal_name} foi atualizada com sucesso!` });
         } catch (error) {
-            res.status(500).json({ error: "Erro ao atualizar agência" });
+            res.status(500).json({ error: `Erro ao atualizar agência: ${error}` });
         }
     }
 
     static async deleteAgency(req: Request, res: Response) {
         const { id } = req.params;
+        const agencyById = await getAgencysById(+id);
         try {
             await deleteAgencys(Number(id));
-            res.status(200).json({ status: 200,message: `Agência com ID ${id} foi deletada com sucesso.` });
+            res.status(200).json({ status: 200,message: `Agência ${agencyById?.legal_name} foi deletada com sucesso.` });
         } catch (error) {
             res.status(500).json({ error: "Erro ao deletar agência" });
         }

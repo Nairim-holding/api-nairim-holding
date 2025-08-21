@@ -100,8 +100,8 @@ export async function createAgencys(data: any) {
             trade_name: data.trade_name,
             legal_name: data.legal_name,
             cnpj: data.cnpj,
-            state_registration: data.state_registration,
-            municipal_registration: data.municipal_registration,
+            state_registration: +data.state_registration,
+            municipal_registration: +data.municipal_registration,
             license_number: data.license_number,
         },
         });
@@ -113,7 +113,7 @@ export async function createAgencys(data: any) {
                   telephone: contact.telephone,
                   phone: contact.phone,
                   email: contact.email,
-                  whatsapp: contact.whatsapp,
+                  whatsapp: false,
                 },
             });
 
@@ -130,7 +130,7 @@ export async function createAgencys(data: any) {
                 data: {
                 zip_code: address.zip_code,
                 street: address.street,
-                number: address.number,
+                number: +address.number,
                 district: address.district,
                 city: address.city,
                 state: address.state,
@@ -167,8 +167,8 @@ export async function updateAgency(id: number, data: any) {
         trade_name: data.trade_name,
         legal_name: data.legal_name,
         cnpj: data.cnpj,
-        state_registration: data.state_registration,
-        municipal_registration: data.municipal_registration,
+        state_registration: +data.state_registration,
+        municipal_registration: +data.municipal_registration,
         license_number: data.license_number,
       },
     });
@@ -183,7 +183,7 @@ export async function updateAgency(id: number, data: any) {
             telephone: contact.telephone,
             phone: contact.phone,
             email: contact.email,
-            whatsapp: contact.whatsapp,
+            whatsapp: false,
           },
         });
 
@@ -204,7 +204,7 @@ export async function updateAgency(id: number, data: any) {
           data: {
             zip_code: address.zip_code,
             street: address.street,
-            number: address.number,
+            number: +address.number,
             district: address.district,
             city: address.city,
             state: address.state,
