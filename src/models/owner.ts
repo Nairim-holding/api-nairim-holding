@@ -1,21 +1,60 @@
+import { Prisma } from "@prisma/client";
 import prisma from "../../prisma/client";
 
-export async function getOwners() {
-  return await prisma.owner.findMany({
-    include: {
-      addresses: {
+export async function getOwners(limit = 10, page = 1, search?: string) {
+  const insensitiveMode: Prisma.QueryMode = "insensitive";
+
+  let whereClause: Prisma.OwnerWhereInput = {};
+
+  if (search) {
+    const normalized = search.trim();
+
+    whereClause = {
+      OR: [
+        { name: { contains: normalized, mode: insensitiveMode } },
+        { cpf: { contains: normalized, mode: insensitiveMode } },
+        { cnpj: { contains: normalized, mode: insensitiveMode } },
+      ],
+    };
+  }
+
+  const take = limit > 0 ? limit : 10;
+  const skip = (page - 1) * take;
+
+  try {
+    const [data, count] = await Promise.all([
+      prisma.owner.findMany({
+        where: whereClause,
+        skip,
+        take,
         include: {
-          address: true,
+          addresses: {
+            include: {
+              address: true,
+            },
+          },
+          contacts: {
+            include: {
+              contact: true,
+            },
+          },
         },
-      },
-      contacts: {
-        include: {
-          contact: true,
-        },
-      },
-    },
-  });
+      }),
+      prisma.owner.count({ where: whereClause }),
+    ]);
+
+    return {
+      data: data || [],
+      count: count || 0,
+      totalPages: count ? Math.ceil(count / take) : 0,
+      currentPage: page,
+    };
+  } catch (error) {
+    console.error("Erro no getOwners:", error);
+    throw new Error("Erro ao buscar proprietários.");
+  }
 }
+
 
 export async function getOwnerById(id: number) {
   return await prisma.owner.findUnique({
@@ -42,13 +81,13 @@ export async function createOwners(data: any) {
     const owner = await tx.owner.create({
       data: {
         name: data.name,
-        internal_code: data.internal_code,
+        internal_code: +data.internal_code,
         occupation: data.occupation,
         marital_status: data.marital_status,
         cnpj: data.cnpj,
         cpf: data.cpf,
-        state_registration: data.state_registration,
-        municipal_registration: data.municipal_registration,
+        state_registration: +data.state_registration,
+        municipal_registration: +data.municipal_registration,
       },
     });
 
@@ -59,7 +98,7 @@ export async function createOwners(data: any) {
           telephone: contact.telephone,
           phone: contact.phone,
           email: contact.email,
-          whatsapp: contact.whatsapp,
+          whatsapp: false,
         },
       });
 
@@ -76,7 +115,7 @@ export async function createOwners(data: any) {
         data: {
           zip_code: address.zip_code,
           street: address.street,
-          number: address.number,
+          number: +address.number,
           district: address.district,
           city: address.city,
           state: address.state,
@@ -111,13 +150,13 @@ export async function updateOwner(id: number, data: any) {
       where: { id },
       data: {
         name: data.name,
-        internal_code: data.internal_code,
+        internal_code: +data.internal_code,
         occupation: data.occupation,
         marital_status: data.marital_status,
         cnpj: data.cnpj,
         cpf: data.cpf,
-        state_registration: data.state_registration,
-        municipal_registration: data.municipal_registration,
+        state_registration: +data.state_registration,
+        municipal_registration: +data.municipal_registration,
       },
     });
 
@@ -131,7 +170,7 @@ export async function updateOwner(id: number, data: any) {
             telephone: contact.telephone,
             phone: contact.phone,
             email: contact.email,
-            whatsapp: contact.whatsapp,
+            whatsapp: false
           },
         });
 
@@ -152,7 +191,7 @@ export async function updateOwner(id: number, data: any) {
           data: {
             zip_code: address.zip_code,
             street: address.street,
-            number: address.number,
+            number: +address.number,
             district: address.district,
             city: address.city,
             state: address.state,
