@@ -150,6 +150,7 @@ model Address {
   propertyAddresses PropertyAddress[]
   agencyAddresses   AgencyAddress[]
   ownerAddresses    OwnerAddress[]
+  tenantAddresses   TenantAddress[]
 }
 
 model Contact {
@@ -218,9 +219,24 @@ model Tenant {
   name         String
   internal_code Int
   occupation   String
+  marital_status        String
+  cnpj                  String     @db.VarChar(20)
+  cpf                   String     @db.VarChar(14)
+  state_registration    Int
+  municipal_registration Int
 
+  addresses    TenantAddress[]
   leases       Lease[]
   contacts     TenantContact[]
+}
+
+model TenantAddress {
+  id          Int       @id @default(autoincrement())
+  address_id  Int
+  tenant_id    Int
+
+  address     Address  @relation(fields: [address_id], references: [id])
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id])
 }
 
 model TenantContact {

@@ -29,9 +29,10 @@ export class TenantController {
     static async createTenant (req: Request , res: Response) {
         try{
             const create = await createTenants( req.body );
-            res.status(200).json({ status: 200, message: `O inquilino ${(await create).name} foi adicionado com sucesso!` });
+            res.status(200).json({ status: 200, message: `O inquilino ${create.name} foi adicionado com sucesso!` });
         } catch (error) {
-            res.status(500)
+            console.error("Erro ao criar inquilino:", error);
+            res.status(500).json({ message: "Erro interno ao criar inquilino." });
         }
     }
 
@@ -39,19 +40,20 @@ export class TenantController {
             const { id } = req.params;
             try {
                 const updated = await updateTenant(Number(id), req.body);
-                res.status(200).json({ status: 200,message: `A agência ${updated.name} foi atualizada com sucesso!` });
+                res.status(200).json({ status: 200,message: `Inquilino ${updated.name} foi atualizado com sucesso!` });
             } catch (error) {
-                res.status(500).json({ error: "Erro ao atualizar agência" });
+                res.status(500).json({ error: "Erro ao atualizar inquilino" });
             }
         }
     
         static async deleteTenant(req: Request, res: Response) {
             const { id } = req.params;
+            const tenantById = await getTenantsById(+id);
             try {
                 await deleteTenant(Number(id));
-                res.status(200).json({ status: 200,message: `Agência com ID ${id} foi deletada com sucesso.` });
+                res.status(200).json({ status: 200,message: `Inquilino ${tenantById?.name} foi deletado com sucesso.` });
             } catch (error) {
-                res.status(500).json({ error: "Erro ao deletar agência" });
+                res.status(500).json({ error: "Erro ao deletar inquilino" });
             }
         }
 }
