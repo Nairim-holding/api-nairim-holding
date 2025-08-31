@@ -4,17 +4,38 @@ import { createOwners, deleteOwners, getOwnerById, getOwners, updateOwner } from
 export class OwnerController {
 
     static async getOwner(req: Request, res: Response) {
-        const limit = parseInt(req.query.limit as string) || 10;
-        const page = parseInt(req.query.page as string) || 1;
-        const search = req.query.search as string;
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
+    const search = req.query.search as string;
 
-        try {
-            const owners = await getOwners(limit, page, search);
-            res.status(200).json(owners);
-        } catch (error) {
-            console.error("Erro ao buscar proprietários:", error);
-            res.status(500).json({ message: "Internal server error" });
-        }
+    const sortOptions = {
+        sort_id: req.query.sort_id as string,
+        sort_name: req.query.sort_name as string,
+        sort_internal_code: req.query.sort_internal_code as string,
+        sort_occupation: req.query.sort_occupation as string,
+        sort_marital_status: req.query.sort_marital_status as string,
+        sort_cnpj: req.query.sort_cnpj as string,
+        sort_cpf: req.query.sort_cpf as string,
+        sort_state_registration: req.query.sort_state_registration as string,
+        sort_municipal_registration: req.query.sort_municipal_registration as string,
+        sort_zip_code: req.query.sort_zip_code as string,
+        sort_state: req.query.sort_state as string,
+        sort_city: req.query.sort_city as string,
+        sort_district: req.query.sort_district as string,
+        sort_address: req.query.sort_address as string,
+        sort_contact: req.query.sort_contact as string,
+        sort_telephone: req.query.sort_telephone as string,
+        sort_phone: req.query.sort_phone as string,
+        sort_email: req.query.sort_email as string,
+    };
+
+    try {
+        const owners = await getOwners(limit, page, search, sortOptions);
+        res.status(200).json(owners);
+    } catch (error) {
+        console.error("Erro ao buscar proprietários:", error);
+        res.status(500).json({ message: "Internal server error" });
+    }
     }
 
     static async getOwnerById(req: Request, res: Response) {

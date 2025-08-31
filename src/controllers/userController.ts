@@ -8,9 +8,19 @@ export class UserController {
         const limit = parseInt(req.query.limit as string) || 10;
         const page = parseInt(req.query.page as string) || 1;
         const search = req.query.search as string;
-
+        const sort_id = req.query.sort_id as string;
+        const sort_name = req.query.sort_name as string;
+        const sort_email = req.query.sort_email as string;
+        const sort_gender = req.query.sort_gender as string;
+        const sort_birth_date = req.query.sort_birth_date as string;
         try {
-            const users = await getUsers(limit, page, search);
+            const users = await getUsers(limit, page, search, {
+                sort_id,
+                sort_name,
+                sort_email,
+                sort_gender,
+                sort_birth_date
+            });
             res.status(200).json(users);
         } catch (error) {
             res.status(500).json({ message: 'Internal server error' });

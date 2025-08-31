@@ -1,21 +1,32 @@
 import prisma from "../../prisma/client";
 import { Prisma } from "@prisma/client";
 
-export async function getAgencys(limit = 10, page = 1, search?: string) {
+export async function getAgencys(
+  limit = 10,
+  page = 1,
+  search?: string,
+  sortOptions?: {
+    sort_id?: string;
+    sort_trade_name?: string;
+    sort_legal_name?: string;
+    sort_cnpj?: string;
+    sort_state_registration?: string;
+    sort_municipal_registration?: string;
+    sort_license_number?: string;
+  }
+) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
   let whereClause: Prisma.AgencyWhereInput = {};
 
   if (search) {
     const normalized = search.trim();
-
     whereClause = {
       OR: [
         { trade_name: { contains: normalized, mode: insensitiveMode } },
         { legal_name: { contains: normalized, mode: insensitiveMode } },
         { cnpj: { contains: normalized, mode: insensitiveMode } },
         { license_number: { contains: normalized, mode: insensitiveMode } },
-        // Se o search for um número, tenta bater com state_registration e municipal_registration
         ...(Number(normalized)
           ? [
               { state_registration: { equals: Number(normalized) } },
@@ -26,6 +37,16 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
     };
   }
 
+  const orderBy: Prisma.AgencyOrderByWithRelationInput[] = [];
+
+  if (sortOptions?.sort_id) orderBy.push({ id: sortOptions.sort_id.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_trade_name) orderBy.push({ trade_name: sortOptions.sort_trade_name.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_legal_name) orderBy.push({ legal_name: sortOptions.sort_legal_name.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_cnpj) orderBy.push({ cnpj: sortOptions.sort_cnpj.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_state_registration) orderBy.push({ state_registration: sortOptions.sort_state_registration.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_municipal_registration) orderBy.push({ municipal_registration: sortOptions.sort_municipal_registration.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_license_number) orderBy.push({ license_number: sortOptions.sort_license_number.toLowerCase() === "desc" ? "desc" : "asc" });
+
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
 
@@ -35,7 +56,7 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
         where: whereClause,
         skip,
         take,
-        orderBy: { created_at: "desc" },
+        orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
         select: {
           id: true,
           trade_name: true,
@@ -44,16 +65,8 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
           state_registration: true,
           municipal_registration: true,
           license_number: true,
-          addresses: {
-            include: {
-              address: true
-            }
-          },
-          contacts: {
-            include: {
-              contact: true
-            }
-          },
+          addresses: { include: { address: true } },
+          contacts: { include: { contact: true } },
           created_at: true,
           updated_at: true,
         },
@@ -72,6 +85,7 @@ export async function getAgencys(limit = 10, page = 1, search?: string) {
     throw new Error("Erro ao buscar agencies.");
   }
 }
+
 
 export async function getAgencysById(id: number) {
   return await prisma.agency.findUnique({

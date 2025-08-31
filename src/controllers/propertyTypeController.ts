@@ -13,8 +13,14 @@ export class PropertyTypeController {
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
 
+    const sort_id = req.query.sort_id as string;
+    const sort_description = req.query.sort_description as string;
+
     try {
-      const propertysType = await getPropertysType(limit, page, search);
+      const propertysType = await getPropertysType(limit, page, search, {
+      sort_id,
+      sort_description,
+    });
       res.status(200).json(propertysType);
     } catch (error) {
       res.status(500);

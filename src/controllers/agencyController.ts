@@ -12,9 +12,17 @@ export class AgencyController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
-
+    const sortOptions = {
+      sort_id: req.query.sort_id as string,
+      sort_trade_name: req.query.sort_trade_name as string,
+      sort_legal_name: req.query.sort_legal_name as string,
+      sort_cnpj: req.query.sort_cnpj as string,
+      sort_state_registration: req.query.sort_state_registration as string,
+      sort_municipal_registration: req.query.sort_municipal_registration as string,
+      sort_license_number: req.query.sort_license_number as string,
+    };
     try {
-      const agencys = await getAgencys(limit, page, search);
+      const agencys = await getAgencys(limit, page, search, sortOptions);
       res.status(200).json(agencys);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

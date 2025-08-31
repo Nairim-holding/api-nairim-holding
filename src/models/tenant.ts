@@ -1,25 +1,53 @@
 import prisma from "../../prisma/client";
 import { Prisma } from "@prisma/client";
 
-export async function getTenants(limit = 10, page = 1, search?: string) {
+export async function getTenants(
+  limit = 10,
+  page = 1,
+  search?: string,
+  sortOptions?: {
+    sort_id?: string;
+    sort_name?: string;
+    sort_internal_code?: string;
+    sort_occupation?: string;
+    sort_marital_status?: string;
+    sort_cnpj?: string;
+    sort_cpf?: string;
+    sort_state_registration?: string;
+    sort_municipal_registration?: string;
+  }
+) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
   let whereClause: Prisma.TenantWhereInput = {};
 
   if (search) {
     const normalized = search.trim();
-
     whereClause = {
       OR: [
         { name: { contains: normalized, mode: insensitiveMode } },
         { occupation: { contains: normalized, mode: insensitiveMode } },
-        // Se o search for um número, tenta bater com internal_code
-        ...(Number(normalized)
-          ? [{ internal_code: { equals: Number(normalized) } }]
-          : []),
+        ...(Number(normalized) ? [{ internal_code: { equals: Number(normalized) } }] : []),
       ],
     };
   }
+
+  const orderBy: Prisma.Enumerable<Prisma.TenantOrderByWithRelationInput> = [];
+
+  const addOrder = (field: string | undefined, dbField: string | undefined = field) => {
+    if (!field) return;
+    orderBy.push({ [dbField!]: field.toLowerCase() === "desc" ? "desc" : "asc" });
+  };
+
+  addOrder(sortOptions?.sort_id, "id");
+  addOrder(sortOptions?.sort_name, "name");
+  addOrder(sortOptions?.sort_internal_code, "internal_code");
+  addOrder(sortOptions?.sort_occupation, "occupation");
+  addOrder(sortOptions?.sort_marital_status, "marital_status");
+  addOrder(sortOptions?.sort_cnpj, "cnpj");
+  addOrder(sortOptions?.sort_cpf, "cpf");
+  addOrder(sortOptions?.sort_state_registration, "state_registration");
+  addOrder(sortOptions?.sort_municipal_registration, "municipal_registration");
 
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
@@ -30,18 +58,10 @@ export async function getTenants(limit = 10, page = 1, search?: string) {
         where: whereClause,
         skip,
         take,
-        orderBy: { id: "desc" },
+        orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
         include: {
-          addresses: {
-            include: {
-              address: true,
-            },
-          },
-          contacts: {
-            include: {
-              contact: true,
-            },
-          },
+          addresses: { include: { address: true } },
+          contacts: { include: { contact: true } }, 
         },
       }),
       prisma.tenant.count({ where: whereClause }),
