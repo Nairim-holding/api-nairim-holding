@@ -36,26 +36,26 @@ enum DocumentType {
 }
 
 model Agency {
-  id                  Int   @id @default(autoincrement())
-  trade_name          String
-  legal_name          String
-  cnpj                String   @db.VarChar(18)
-  state_registration  Int
-  municipal_registration Int
-  license_number      String   @db.VarChar(20)
-  created_at          DateTime @default(now())
-  updated_at          DateTime @updatedAt
-  contacts            AgencyContact[]
-  addresses           AgencyAddress[]
+  id                     Int   @id @default(autoincrement())
+  trade_name             String
+  legal_name             String
+  cnpj                   String   @db.VarChar(18)
+  state_registration     Int?
+  municipal_registration Int?
+  license_number         String   @db.VarChar(20)
+  created_at             DateTime @default(now())
+  updated_at             DateTime @updatedAt
+  contacts               AgencyContact[]
+  addresses              AgencyAddress[]
 }
 
 model AgencyContact {
   id         Int     @id @default(autoincrement())
-  contact_id Int
+  contact_id Int?
   agency_id  Int
 
-  contact    Contact @relation(fields: [contact_id], references: [id])
-  agency     Agency  @relation(fields: [agency_id], references: [id])
+  contact    Contact? @relation(fields: [contact_id], references: [id])
+  agency     Agency   @relation(fields: [agency_id], references: [id])
 }
 
 model AgencyAddress {
@@ -154,9 +154,9 @@ model Address {
 
 model Contact {
   id         Int       @id @default(autoincrement())
-  phone      String    @db.VarChar(20)
-  email      String
-  whatsapp   Boolean
+  phone      String?   @db.VarChar(20) 
+  email      String?                      
+  whatsapp   Boolean?                    
   created_at DateTime  @default(now())
   updated_at DateTime  @updatedAt
 
@@ -177,20 +177,20 @@ model Favorite {
 }
 
 model Owner {
-  id                    Int         @id @default(autoincrement())
-  name                  String
-  internal_code         Int
-  occupation            String
-  marital_status        String
-  cnpj                  String     @db.VarChar(20)
-  cpf                   String     @db.VarChar(14)
-  state_registration    Int
-  municipal_registration Int
+  id                     Int         @id @default(autoincrement())
+  name                   String
+  internal_code          Int?    
+  occupation             String
+  marital_status         String
+  cnpj                   String     @db.VarChar(20)
+  cpf                    String     @db.VarChar(14)
+  state_registration     Int?      
+  municipal_registration Int?       
 
-  properties            Property[]
-  leases                Lease[]
-  addresses             OwnerAddress[]
-  contacts              OwnerContact[]
+  properties             Property[]
+  leases                 Lease[]
+  addresses              OwnerAddress[]
+  contacts               OwnerContact[]
 }
 
 model OwnerAddress {
@@ -204,30 +204,30 @@ model OwnerAddress {
 
 model OwnerContact {
   id          Int       @id @default(autoincrement())
-  contact_id  Int
+  contact_id  Int?
   owner_id    Int
 
-  contact     Contact  @relation(fields: [contact_id], references: [id])
-  owner       Owner    @relation(fields: [owner_id], references: [id])
+  contact     Contact?  @relation(fields: [contact_id], references: [id])
+  owner       Owner     @relation(fields: [owner_id], references: [id])
 }
 
 model Tenant {
-  id           Int          @id @default(autoincrement())
-  name         String
-  internal_code Int
-  occupation   String
+  id            Int          @id @default(autoincrement())
+  name          String
+  internal_code Int?      
+  occupation    String
 
-  leases       Lease[]
-  contacts     TenantContact[]
+  leases        Lease[]
+  contacts      TenantContact[]
 }
 
 model TenantContact {
   id          Int       @id @default(autoincrement())
-  contact_id  Int
+  contact_id  Int?
   tenant_id   Int
 
-  contact     Contact  @relation(fields: [contact_id], references: [id])
-  tenant      Tenant   @relation(fields: [tenant_id], references: [id])
+  contact     Contact?  @relation(fields: [contact_id], references: [id])
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id])
 }
 
 model Lease {
