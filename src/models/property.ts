@@ -5,80 +5,111 @@ import fs from "fs";
 import path from "path";
 import deleteFolderRecursive from "../utils/deleteDirectory";
 
-export async function getPropertys(limit = 10, page = 1, search?: string) {
+export async function getPropertys(
+  limit = 10,
+  page = 1,
+  search?: string,
+  sortOptions?: Record<string, string>
+) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
-  const whereClause = search
+  const whereClause: Prisma.PropertyWhereInput = search
     ? {
         OR: [
           { title: { contains: search, mode: insensitiveMode } },
           { tax_registration: { contains: search, mode: insensitiveMode } },
           { notes: { contains: search, mode: insensitiveMode } },
-          {
-            type: {
-              is: {
-                description: { contains: search, mode: insensitiveMode },
-              },
-            },
-          },
-          {
-            owner: {
-              is: {
-                name: { contains: search, mode: insensitiveMode },
-                occupation: { contains: search, mode: insensitiveMode },
-                marital_status: { contains: search, mode: insensitiveMode },
-                cnpj: { contains: search, mode: insensitiveMode },
-                cpf: { contains: search, mode: insensitiveMode },
-              },
-            },
-          },
-          {
-            addresses: {
-              some: {
-                address: {
-                  OR: [
-                    { zip_code: { contains: search, mode: insensitiveMode } },
-                    { street: { contains: search, mode: insensitiveMode } },
-                    { district: { contains: search, mode: insensitiveMode } },
-                    { city: { contains: search, mode: insensitiveMode } },
-                    { state: { contains: search, mode: insensitiveMode } },
-                    { country: { contains: search, mode: insensitiveMode } },
-                  ],
-                },
-              },
-            },
-          },
+          { owner: { is: { name: { contains: search, mode: insensitiveMode } } } },
+          { type: { is: { description: { contains: search, mode: insensitiveMode } } } },
         ],
       }
     : {};
 
-  const skip = (page - 1) * limit;
+  const take = limit > 0 ? limit : 10;
+  const skip = (page - 1) * take;
 
-  const data = await prisma.property.findMany({
-    where: whereClause,
-    include: {
-      values: true,
-      addresses: {
-        include: {
-          address: true,
-        },
+  const orderBy: Prisma.PropertyOrderByWithRelationInput[] = [];
+
+  if (sortOptions) {
+    Object.entries(sortOptions).forEach(([key, value]) => {
+      if (!value) return;
+      const order = value.toLowerCase() === "desc" ? "desc" : "asc";
+
+      switch (key) {
+        case "sort_id":
+          orderBy.push({ id: order });
+          break;
+        case "sort_title":
+          orderBy.push({ title: order });
+          break;
+        case "sort_owner":
+          orderBy.push({ owner: { name: order } });
+          break;
+        case "sort_type":
+          orderBy.push({ type: { description: order } });
+          break;
+        case "sort_bedrooms":
+        case "sort_bathrooms":
+        case "sort_half_bathrooms":
+        case "sort_garage_spaces":
+        case "sort_area_total":
+        case "sort_area_built":
+        case "sort_frontage":
+        case "sort_floor_number":
+        case "sort_furnished":
+          orderBy.push({ [key.replace("sort_", "")]: order } as any);
+          break;
+        case "sort_tax_registration":
+          orderBy.push({ tax_registration: order });
+          break;
+        case "sort_notes":
+          orderBy.push({ notes: order });
+          break;
+      }
+    });
+  }
+
+  const [data, count] = await Promise.all([
+    prisma.property.findMany({
+      where: whereClause,
+      include: {
+        addresses: { include: { address: true } },
+        owner: true,
+        type: true,
+        documents: true,
+        values: true,
       },
-      owner: true,
-      type: true,
-    },
-    skip,
-    take: limit,
-  });
+      skip,
+      take,
+      orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
+    }),
+    prisma.property.count({ where: whereClause }),
+  ]);
 
-  const count = await prisma.property.count({ where: whereClause });
+  const addrKeys = ["zip_code", "street", "district", "city", "state"];
+  if (sortOptions) {
+    addrKeys.forEach((key) => {
+      const sortKey = `sort_${key}`;
+      if (sortOptions[sortKey]) {
+        const order = sortOptions[sortKey].toLowerCase() === "desc" ? -1 : 1;
+        data.sort((a, b) => {
+          const aVal = a.addresses?.[0]?.address[key as keyof typeof a.addresses[0]["address"]];
+          const bVal = b.addresses?.[0]?.address[key as keyof typeof b.addresses[0]["address"]];
+          if (aVal == bVal) return 0;
+          return aVal > bVal ? order : -order;
+        });
+      }
+    });
+  }
 
   return {
     data,
     count,
-    totalPages: Math.ceil(count / limit),
+    totalPages: count ? Math.ceil(count / take) : 0,
     currentPage: page,
   };
 }
+
 
 export async function getPropertyById(id: number) {
   return await prisma.property.findUnique({

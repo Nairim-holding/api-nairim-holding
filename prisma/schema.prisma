@@ -150,6 +150,7 @@ model Address {
   propertyAddresses PropertyAddress[]
   agencyAddresses   AgencyAddress[]
   ownerAddresses    OwnerAddress[]
+  tenantAddresses   TenantAddress[]
 }
 
 model Contact {
@@ -219,6 +220,15 @@ model Tenant {
 
   leases        Lease[]
   contacts      TenantContact[]
+}
+
+model TenantAddress {
+  id          Int       @id @default(autoincrement())
+  address_id  Int
+  tenant_id    Int
+
+  address     Address  @relation(fields: [address_id], references: [id])
+  tenant      Tenant    @relation(fields: [tenant_id], references: [id])
 }
 
 model TenantContact {

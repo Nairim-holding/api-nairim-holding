@@ -10,9 +10,30 @@ export class PropertyController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
-
+    const sortOptions = {
+      sort_id: req.query.sort_id as string,
+      sort_owner: req.query.sort_owner as string,
+      sort_title: req.query.sort_title as string,
+      sort_zip_code: req.query.sort_zip_code as string,
+      sort_street: req.query.sort_street as string,
+      sort_district: req.query.sort_district as string,
+      sort_city: req.query.sort_city as string,
+      sort_state: req.query.sort_state as string,
+      sort_type: req.query.sort_type as string,
+      sort_bedrooms: req.query.sort_bedrooms as string,
+      sort_bathrooms: req.query.sort_bathrooms as string,
+      sort_half_bathrooms: req.query.sort_half_bathrooms as string,
+      sort_garage_spaces: req.query.sort_garage_spaces as string,
+      sort_area_total: req.query.sort_area_total as string,
+      sort_area_built: req.query.sort_area_built as string,
+      sort_frontage: req.query.sort_frontage as string,
+      sort_furnished: req.query.sort_furnished as string,
+      sort_floor_number: req.query.sort_floor_number as string,
+      sort_tax_registration: req.query.sort_tax_registration as string,
+      sort_notes: req.query.sort_notes as string,
+    };
     try {
-      const agencys = await getPropertys(limit, page, search);
+      const agencys = await getPropertys(limit, page, search, sortOptions);
       res.status(200).json(agencys);
     } catch (error) {
       res.status(500).json({ message: 'Internal server error' });
