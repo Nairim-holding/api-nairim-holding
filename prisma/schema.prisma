@@ -282,5 +282,3 @@ model PropertyType {
   properties  Property[]
   leases      Lease[]
 }
-
-//broooooooo
