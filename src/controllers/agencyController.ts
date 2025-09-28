@@ -21,8 +21,9 @@ export class AgencyController {
       sort_municipal_registration: req.query.sort_municipal_registration as string,
       sort_license_number: req.query.sort_license_number as string,
     };
+    const includeInactive = req.query.includeInactive === "true";
     try {
-      const agencys = await getAgencys(limit, page, search, sortOptions);
+      const agencys = await getAgencys(limit, page, search, sortOptions, includeInactive);
       res.status(200).json(agencys);
     } catch (error) {
       res.status(500).json({ message: "Internal server error" });

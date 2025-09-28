@@ -13,32 +13,33 @@ export async function getAgencys(
     sort_state_registration?: string;
     sort_municipal_registration?: string;
     sort_license_number?: string;
-  }
+  },
+  includeInactive = false 
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
-  let whereClause: Prisma.AgencyWhereInput = {};
+  let whereClause: Prisma.AgencyWhereInput = includeInactive ? {} : { is_active: true };
 
   if (search) {
     const normalized = search.trim();
-    whereClause = {
-      OR: [
-        { trade_name: { contains: normalized, mode: insensitiveMode } },
-        { legal_name: { contains: normalized, mode: insensitiveMode } },
-        { cnpj: { contains: normalized, mode: insensitiveMode } },
-        { license_number: { contains: normalized, mode: insensitiveMode } },
-        ...(Number(normalized)
-          ? [
-              { state_registration: { equals: Number(normalized) } },
-              { municipal_registration: { equals: Number(normalized) } },
-            ]
-          : []),
-      ],
-    };
+    const orFilters: Prisma.AgencyWhereInput["OR"] = [
+      { trade_name: { contains: normalized, mode: insensitiveMode } },
+      { legal_name: { contains: normalized, mode: insensitiveMode } },
+      { cnpj: { contains: normalized, mode: insensitiveMode } },
+      { license_number: { contains: normalized, mode: insensitiveMode } },
+    ];
+
+    if (Number(normalized)) {
+      orFilters.push(
+        { state_registration: { equals: Number(normalized) } },
+        { municipal_registration: { equals: Number(normalized) } }
+      );
+    }
+
+    whereClause = { AND: [whereClause], OR: orFilters };
   }
 
   const orderBy: Prisma.AgencyOrderByWithRelationInput[] = [];
-
   if (sortOptions?.sort_id) orderBy.push({ id: sortOptions.sort_id.toLowerCase() === "desc" ? "desc" : "asc" });
   if (sortOptions?.sort_trade_name) orderBy.push({ trade_name: sortOptions.sort_trade_name.toLowerCase() === "desc" ? "desc" : "asc" });
   if (sortOptions?.sort_legal_name) orderBy.push({ legal_name: sortOptions.sort_legal_name.toLowerCase() === "desc" ? "desc" : "asc" });
@@ -85,7 +86,6 @@ export async function getAgencys(
     throw new Error("Erro ao buscar agencies.");
   }
 }
-
 
 export async function getAgencysById(id: number) {
   return await prisma.agency.findUnique({
@@ -166,10 +166,20 @@ export async function createAgencys(data: any) {
   
 export async function deleteAgencys(id: number) {
   return await prisma.$transaction(async (tx) => {
-    await tx.agencyAddress.deleteMany({ where: { agency_id: id } });
-    await tx.agencyContact.deleteMany({ where: { agency_id: id } });
+    await tx.agencyAddress.updateMany({
+      where: { agency_id: id, is_active: true },
+      data: { is_active: false },
+    });
 
-    return await tx.agency.delete({ where: { id } });
+    await tx.agencyContact.updateMany({
+      where: { agency_id: id, is_active: true },
+      data: { is_active: false },
+    });
+
+    return await tx.agency.update({
+      where: { id },
+      data: { is_active: false },
+    });
   });
 }
 

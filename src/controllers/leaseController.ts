@@ -1,33 +1,86 @@
 import { Request, Response } from "express";
-import { createLeases, getLeases, getLeasesById } from "../models/lease";
+import { 
+    createLease, 
+    getLeases, 
+    getLeaseById, 
+    updateLease, 
+    deleteLeases 
+} from "../models/lease";
 
 export class LeaseController {
 
-    static async getLease (req: Request, res: Response){
-        try{
-            const leases = await getLeases();
+    static async getLeases(req: Request, res: Response) {
+        const limit = parseInt(req.query.limit as string) || 10;
+        const page = parseInt(req.query.page as string) || 1;
+        const search = req.query.search as string;
+        const includeInactive = req.query.includeInactive === "true"; // Novo parâmetro
+        const sortOptions = {
+            sort_id: req.query.sort_id as string,
+            sort_contract_number: req.query.sort_contract_number as string,
+            sort_start_date: req.query.sort_start_date as string,
+            sort_end_date: req.query.sort_end_date as string,
+            sort_rent_amount: req.query.sort_rent_amount as string
+        };
+
+        try {
+            const leases = await getLeases(limit, page, search, sortOptions, includeInactive);
             res.status(200).json(leases);
-        } catch (error){
-            res.status(500);
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Internal server error" });
         }
     }
 
-    static async getLeasesById(req: Request, res: Response) {
+    static async getLeaseById(req: Request, res: Response) {
         const { id } = req.params;
         try {
-          const leases = await getLeasesById(+id);
-          res.status(200).json(leases);
+            const lease = await getLeaseById(+id);
+            res.status(200).json(lease);
         } catch (error) {
-          res.status(500);
+            console.error(error);
+            res.status(500).json({ message: "Erro ao buscar Lease" });
         }
-      }
+    }
 
-    static async createLease (req: Request , res: Response) {
-        try{
-            const create = await createLeases( req.body );
-            res.status(200).json({ status: 200, message: `O locação adicionado com sucesso!` });
+    static async createLease(req: Request, res: Response) {
+        try {
+            const lease = await createLease(req.body);
+            res.status(200).json({
+                status: 200,
+                message: `Lease ${lease.contract_number} criada com sucesso!`
+            });
         } catch (error) {
-            res.status(500)
+            console.error(error);
+            res.status(500).json({ message: `Erro ao criar Lease: ${error}` });
+        }
+    }
+
+    static async updateLease(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const lease = await updateLease(Number(id), req.body);
+            res.status(200).json({
+                status: 200,
+                message: `Lease ${lease.contract_number} atualizada com sucesso!`
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: `Erro ao atualizar Lease: ${error}` });
+        }
+    }
+
+    static async deleteLease(req: Request, res: Response) {
+        const { id } = req.params;
+        try {
+            const lease = await getLeaseById(+id);
+            await deleteLeases(Number(id));
+            res.status(200).json({
+                status: 200,
+                message: `Lease ${lease?.contract_number} desativada com sucesso.`
+            });
+        } catch (error) {
+            console.error(error);
+            res.status(500).json({ message: "Erro ao desativar Lease" });
         }
     }
 }

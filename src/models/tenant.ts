@@ -15,28 +15,36 @@ export async function getTenants(
     sort_cpf?: string;
     sort_state_registration?: string;
     sort_municipal_registration?: string;
-  }
+  },
+  includeInactive = false
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
-  let whereClause: Prisma.TenantWhereInput = {};
+  let whereClause: Prisma.TenantWhereInput = includeInactive
+    ? {}
+    : { is_active: true };
 
   if (search) {
     const normalized = search.trim();
-    whereClause = {
-      OR: [
-        { name: { contains: normalized, mode: insensitiveMode } },
-        { occupation: { contains: normalized, mode: insensitiveMode } },
-        ...(Number(normalized) ? [{ internal_code: { equals: Number(normalized) } }] : []),
-      ],
-    };
+    const orFilters: Prisma.TenantWhereInput["OR"] = [
+      { name: { contains: normalized, mode: insensitiveMode } },
+      { occupation: { contains: normalized, mode: insensitiveMode } },
+    ];
+    if (!isNaN(Number(normalized))) {
+      orFilters.push({ internal_code: { equals: Number(normalized) } });
+    }
+    whereClause = { AND: [whereClause], OR: orFilters };
   }
 
   const orderBy: Prisma.Enumerable<Prisma.TenantOrderByWithRelationInput> = [];
-
-  const addOrder = (field: string | undefined, dbField: string | undefined = field) => {
+  const addOrder = (
+    field: string | undefined,
+    dbField: string | undefined = field
+  ) => {
     if (!field) return;
-    orderBy.push({ [dbField!]: field.toLowerCase() === "desc" ? "desc" : "asc" });
+    orderBy.push({
+      [dbField!]: field.toLowerCase() === "desc" ? "desc" : "asc",
+    });
   };
 
   addOrder(sortOptions?.sort_id, "id");
@@ -61,7 +69,7 @@ export async function getTenants(
         orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
         include: {
           addresses: { include: { address: true } },
-          contacts: { include: { contact: true } }, 
+          contacts: { include: { contact: true } },
         },
       }),
       prisma.tenant.count({ where: whereClause }),
@@ -124,26 +132,26 @@ export async function createTenants(data: any) {
         },
       });
 
-    for (const address of data.addresses ?? []) {
-      const createdAddress = await tx.address.create({
-        data: {
-          zip_code: address.zip_code,
-          street: address.street,
-          number: +address.number,
-          district: address.district,
-          city: address.city,
-          state: address.state,
-          country: address.country,
-        },
-      });
+      for (const address of data.addresses ?? []) {
+        const createdAddress = await tx.address.create({
+          data: {
+            zip_code: address.zip_code,
+            street: address.street,
+            number: +address.number,
+            district: address.district,
+            city: address.city,
+            state: address.state,
+            country: address.country,
+          },
+        });
 
-      await tx.tenantAddress.create({
-        data: {
-          address_id: createdAddress.id,
-          tenant_id: tenant.id,
-        },
-      });
-    }
+        await tx.tenantAddress.create({
+          data: {
+            address_id: createdAddress.id,
+            tenant_id: tenant.id,
+          },
+        });
+      }
 
       await tx.tenantContact.create({
         data: {
@@ -158,13 +166,22 @@ export async function createTenants(data: any) {
 
 export async function deleteTenant(id: number) {
   return await prisma.$transaction(async (tx) => {
-    await tx.tenantContact.deleteMany({ where: { tenant_id: id } });
-    await tx.tenantAddress.deleteMany({ where: { tenant_id: id } });
+    await tx.tenantContact.updateMany({
+      where: { tenant_id: id, is_active: true },
+      data: { is_active: false },
+    });
 
-    return await tx.tenant.delete({ where: { id } });
+    await tx.tenantAddress.updateMany({
+      where: { tenant_id: id, is_active: true },
+      data: { is_active: false },
+    });
+
+    return await tx.tenant.update({
+      where: { id },
+      data: { is_active: false },
+    });
   });
 }
-
 export async function updateTenant(id: number, data: any) {
   return await prisma.$transaction(async (tx) => {
     const updatedTenant = await tx.tenant.update({
@@ -191,7 +208,7 @@ export async function updateTenant(id: number, data: any) {
             telephone: contact.telephone,
             phone: contact.phone,
             email: contact.email,
-            whatsapp: false
+            whatsapp: false,
           },
         });
 

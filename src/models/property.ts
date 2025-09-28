@@ -9,27 +9,30 @@ export async function getPropertys(
   limit = 10,
   page = 1,
   search?: string,
-  sortOptions?: Record<string, string>
+  sortOptions?: Record<string, string>,
+  includeInactive = false 
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
-  const whereClause: Prisma.PropertyWhereInput = search
-    ? {
-        OR: [
-          { title: { contains: search, mode: insensitiveMode } },
-          { tax_registration: { contains: search, mode: insensitiveMode } },
-          { notes: { contains: search, mode: insensitiveMode } },
-          { owner: { is: { name: { contains: search, mode: insensitiveMode } } } },
-          { type: { is: { description: { contains: search, mode: insensitiveMode } } } },
-        ],
-      }
-    : {};
+  let whereClause: Prisma.PropertyWhereInput = includeInactive ? {} : { is_active: true };
+
+  if (search) {
+    const normalized = search.trim();
+    const orFilters: Prisma.PropertyWhereInput["OR"] = [
+      { title: { contains: normalized, mode: insensitiveMode } },
+      { tax_registration: { contains: normalized, mode: insensitiveMode } },
+      { notes: { contains: normalized, mode: insensitiveMode } },
+      { owner: { is: { name: { contains: normalized, mode: insensitiveMode } } } },
+      { type: { is: { description: { contains: normalized, mode: insensitiveMode } } } },
+    ];
+
+    whereClause = { AND: [whereClause], OR: orFilters };
+  }
 
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
 
   const orderBy: Prisma.PropertyOrderByWithRelationInput[] = [];
-
   if (sortOptions) {
     Object.entries(sortOptions).forEach(([key, value]) => {
       if (!value) return;
@@ -109,7 +112,6 @@ export async function getPropertys(
     currentPage: page,
   };
 }
-
 
 export async function getPropertyById(id: number) {
   return await prisma.property.findUnique({
@@ -269,20 +271,35 @@ export async function createPropertys(data: any) {
 
 export async function deletePropertys(id: number) {
   return await prisma.$transaction(async (tx) => {
-    const documents = await tx.document.findMany({
-      where: { property_id: id },
+    await tx.document.updateMany({
+      where: { property_id: id, is_active: true },
+      data: { is_active: false },
     });
 
-    const propertyFolder = path.join(__dirname, "..", "..", "uploads", id.toString());
-    deleteFolderRecursive(propertyFolder);
+    await tx.propertyAddress.updateMany({
+      where: { property_id: id, is_active: true },
+      data: { is_active: false },
+    });
 
-    await tx.document.deleteMany({ where: { property_id: id } });
-    await tx.propertyAddress.deleteMany({ where: { property_id: id } });
-    await tx.favorite.deleteMany({ where: { property_id: id } });
-    await tx.lease.deleteMany({ where: { property_id: id } });
-    await tx.propertyValue.deleteMany({ where: { property_id: id } });
+    await tx.favorite.updateMany({
+      where: { property_id: id, is_active: true },
+      data: { is_active: false },
+    });
 
-    await tx.property.delete({ where: { id } });
+    await tx.lease.updateMany({
+      where: { property_id: id, is_active: true },
+      data: { is_active: false },
+    });
+
+    await tx.propertyValue.updateMany({
+      where: { property_id: id, is_active: true },
+      data: { is_active: false },
+    });
+
+    return await tx.property.update({
+      where: { id },
+      data: { is_active: false },
+    });
   });
 }
 

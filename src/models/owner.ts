@@ -15,31 +15,30 @@ export async function getOwners(
     sort_cpf?: string;
     sort_state_registration?: string;
     sort_municipal_registration?: string;
-  }
+  },
+  includeInactive = false
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
-  // Filtro de busca
-  let whereClause: Prisma.OwnerWhereInput = {};
+  let whereClause: Prisma.OwnerWhereInput = includeInactive ? {} : { is_active: true };
+
   if (search) {
     const normalized = search.trim();
-    whereClause = {
-      OR: [
-        { name: { contains: normalized, mode: insensitiveMode } },
-        { cpf: { contains: normalized, mode: insensitiveMode } },
-        { cnpj: { contains: normalized, mode: insensitiveMode } },
-      ],
-    };
+    const orFilters: Prisma.OwnerWhereInput["OR"] = [
+      { name: { contains: normalized, mode: insensitiveMode } },
+      { cpf: { contains: normalized, mode: insensitiveMode } },
+      { cnpj: { contains: normalized, mode: insensitiveMode } },
+    ];
+
+    whereClause = { AND: [whereClause], OR: orFilters };
   }
 
-  // Ordenação
   const orderBy: Prisma.Enumerable<Prisma.OwnerOrderByWithRelationInput> = [];
   const addOrder = (field: string | undefined, dbField: string | undefined = field) => {
     if (!field) return;
     orderBy.push({ [dbField!]: field.toLowerCase() === "desc" ? "desc" : "asc" });
   };
 
-  // Campos diretos do Owner
   addOrder(sortOptions?.sort_id, "id");
   addOrder(sortOptions?.sort_name, "name");
   addOrder(sortOptions?.sort_internal_code, "internal_code");
@@ -61,8 +60,8 @@ export async function getOwners(
         take,
         orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
         include: {
-          addresses: { include: { address: true } }, // Não dá para ordenar aqui
-          contacts: { include: { contact: true } },  // Não dá para ordenar aqui
+          addresses: { include: { address: true } },
+          contacts: { include: { contact: true } },
         },
       }),
       prisma.owner.count({ where: whereClause }),
@@ -79,7 +78,6 @@ export async function getOwners(
     throw new Error("Erro ao buscar proprietários.");
   }
 }
-
 
 export async function getOwnerById(id: number) {
   return await prisma.owner.findUnique({
@@ -162,10 +160,20 @@ export async function createOwners(data: any) {
 
 export async function deleteOwners(id: number) {
   return await prisma.$transaction(async (tx) => {
-    await tx.ownerAddress.deleteMany({ where: { owner_id: id } });
-    await tx.ownerContact.deleteMany({ where: { owner_id: id } });
+    await tx.ownerAddress.updateMany({
+      where: { owner_id: id, is_active: true },
+      data: { is_active: false },
+    });
 
-    return await tx.owner.delete({ where: { id } });
+    await tx.ownerContact.updateMany({
+      where: { owner_id: id, is_active: true },
+      data: { is_active: false },
+    });
+
+    return await tx.owner.update({
+      where: { id },
+      data: { is_active: false },
+    });
   });
 }
 

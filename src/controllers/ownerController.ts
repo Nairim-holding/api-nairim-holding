@@ -7,6 +7,7 @@ export class OwnerController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
+    const includeInactive = req.query.includeInactive === "true";
 
     const sortOptions = {
         sort_id: req.query.sort_id as string,
@@ -30,7 +31,7 @@ export class OwnerController {
     };
 
     try {
-        const owners = await getOwners(limit, page, search, sortOptions);
+        const owners = await getOwners(limit, page, search, sortOptions, includeInactive);
         res.status(200).json(owners);
     } catch (error) {
         console.error("Erro ao buscar proprietários:", error);

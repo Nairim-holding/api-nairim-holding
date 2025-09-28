@@ -3,40 +3,32 @@ import { createTenants, deleteTenant, getTenants, getTenantsById, updateTenant }
 
 export class TenantController {
 
-static async getTenant(req: Request, res: Response) {
-  const limit = parseInt(req.query.limit as string) || 10;
-  const page = parseInt(req.query.page as string) || 1;
-  const search = req.query.search as string;
+  static async getTenant(req: Request, res: Response) {
+    const limit = parseInt(req.query.limit as string) || 10;
+    const page = parseInt(req.query.page as string) || 1;
+    const search = req.query.search as string;
+    const includeInactive = req.query.includeInactive === "true";
 
-  const sort_id = req.query.sort_id as string;
-  const sort_name = req.query.sort_name as string;
-  const sort_internal_code = req.query.sort_internal_code as string;
-  const sort_occupation = req.query.sort_occupation as string;
-  const sort_marital_status = req.query.sort_marital_status as string;
-  const sort_cnpj = req.query.sort_cnpj as string;
-  const sort_cpf = req.query.sort_cpf as string;
-  const sort_state_registration = req.query.sort_state_registration as string;
-  const sort_municipal_registration = req.query.sort_municipal_registration as string;
+    const sortOptions = {
+      sort_id: req.query.sort_id as string,
+      sort_name: req.query.sort_name as string,
+      sort_internal_code: req.query.sort_internal_code as string,
+      sort_occupation: req.query.sort_occupation as string,
+      sort_marital_status: req.query.sort_marital_status as string,
+      sort_cnpj: req.query.sort_cnpj as string,
+      sort_cpf: req.query.sort_cpf as string,
+      sort_state_registration: req.query.sort_state_registration as string,
+      sort_municipal_registration: req.query.sort_municipal_registration as string,
+    };
 
-  try {
-    const tenants = await getTenants(limit, page, search, {
-      sort_id,
-      sort_name,
-      sort_internal_code,
-      sort_occupation,
-      sort_marital_status,
-      sort_cnpj,
-      sort_cpf,
-      sort_state_registration,
-      sort_municipal_registration,
-    });
-
-    res.status(200).json(tenants);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Internal server error' });
+    try {
+      const tenants = await getTenants(limit, page, search, sortOptions, includeInactive);
+      res.status(200).json(tenants);
+    } catch (error) {
+      console.error("Erro ao buscar inquilinos:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
   }
-}
 
     static async getTenantsById(req: Request, res: Response) {
         const { id } = req.params;

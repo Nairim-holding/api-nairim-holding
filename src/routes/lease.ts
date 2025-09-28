@@ -3,8 +3,10 @@ import { LeaseController } from "../controllers/leaseController";
 
 const router = express.Router();
 
-router.get("/lease", LeaseController.getLease);
-router.get("/lease/:id", LeaseController.getLeasesById);
-router.post("/lease", LeaseController.createLease);
+router.get("/leases", LeaseController.getLeases);
+router.get("/leases/:id", LeaseController.getLeaseById);
+router.post("/leases", LeaseController.createLease);
+router.put("/leases/:id", LeaseController.updateLease);
+router.delete("/leases/:id", LeaseController.deleteLease);
 
 export default router;

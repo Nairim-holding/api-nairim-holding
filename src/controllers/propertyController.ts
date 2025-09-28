@@ -1,5 +1,11 @@
 import { Request, Response } from "express";
-import { createPropertys, deletePropertys, getPropertyById, getPropertys, updatePropertys } from "../models/property";
+import {
+  createPropertys,
+  deletePropertys,
+  getPropertyById,
+  getPropertys,
+  updatePropertys,
+} from "../models/property";
 import { Prisma } from "@prisma/client";
 import prisma from "../../prisma/client";
 import fs from "fs";
@@ -10,6 +16,8 @@ export class PropertyController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
+    const includeInactive = req.query.includeInactive === "true"; // Novo parâmetro
+
     const sortOptions = {
       sort_id: req.query.sort_id as string,
       sort_owner: req.query.sort_owner as string,
@@ -32,11 +40,19 @@ export class PropertyController {
       sort_tax_registration: req.query.sort_tax_registration as string,
       sort_notes: req.query.sort_notes as string,
     };
+
     try {
-      const agencys = await getPropertys(limit, page, search, sortOptions);
-      res.status(200).json(agencys);
+      const properties = await getPropertys(
+        limit,
+        page,
+        search,
+        sortOptions,
+        includeInactive
+      );
+      res.status(200).json(properties);
     } catch (error) {
-      res.status(500).json({ message: 'Internal server error' });
+      console.error("Erro ao buscar imóveis:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   }
 
@@ -53,13 +69,11 @@ export class PropertyController {
   static async createProperty(req: Request, res: Response): Promise<any> {
     try {
       const create = await createPropertys(req.body);
-      res
-        .status(200)
-        .json({
-          status: 200,
-          message: `O imóvel ${(await create).title} foi criado com sucesso!`,
-          id: create.id,
-        });
+      res.status(200).json({
+        status: 200,
+        message: `O imóvel ${(await create).title} foi criado com sucesso!`,
+        id: create.id,
+      });
     } catch (error: any) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         switch (error.code) {
@@ -90,17 +104,17 @@ export class PropertyController {
             });
         }
       }
-        return res.status(500).json({
-            status: 500,
-            message: 'Erro interno ao criar o imóvel. Tente novamente mais tarde.'
-        });
+      return res.status(500).json({
+        status: 500,
+        message: "Erro interno ao criar o imóvel. Tente novamente mais tarde.",
+      });
     }
   }
 
   static async createMidias(req: Request, res: Response): Promise<any> {
     try {
       const propertyId = Number(req.params.id);
-      const userId = Number(req.body.userId); 
+      const userId = Number(req.body.userId);
       if (!propertyId) {
         return res.status(400).json({ message: "ID do imóvel inválido" });
       }
@@ -157,12 +171,10 @@ export class PropertyController {
     const { id } = req.params;
     try {
       const updated = await updatePropertys(Number(id), req.body);
-      res
-        .status(200)
-        .json({
-          status: 200,
-          message: `O imovel ${updated.title} foi atualizado com sucesso!`,
-        });
+      res.status(200).json({
+        status: 200,
+        message: `O imovel ${updated.title} foi atualizado com sucesso!`,
+      });
     } catch (error) {
       res.status(500).json({ error: "Erro ao atualizar imovel" });
     }
@@ -257,12 +269,10 @@ export class PropertyController {
     const propertyById = await getPropertyById(+id);
     try {
       await deletePropertys(Number(id));
-      res
-        .status(200)
-        .json({
-          status: 200,
-          message: `Imovel ${propertyById?.title} foi deletado com sucesso.`,
-        });
+      res.status(200).json({
+        status: 200,
+        message: `Imovel ${propertyById?.title} foi deletado com sucesso.`,
+      });
     } catch (error) {
       res.status(500).json({ error: `Erro ao deletar imovel ${error}` });
     }

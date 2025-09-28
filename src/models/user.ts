@@ -5,16 +5,18 @@ export async function getUsers(
   limit = 10,
   page = 1,
   search?: string,
-  sortOptions?: { sort_id?: string; sort_name?: string; sort_email?: string; sort_gender?: string; sort_birth_date?: string;  }
+  sortOptions?: { sort_id?: string; sort_name?: string; sort_email?: string; sort_gender?: string; sort_birth_date?: string; },
+  includeInactive = false
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
-  let whereClause: Prisma.UserWhereInput = {};
+
+  let whereClause: Prisma.UserWhereInput = includeInactive ? {} : { is_active: true };
 
   if (search) {
     const normalized = search.toUpperCase().trim();
     const orFilters: Prisma.UserWhereInput["OR"] = [
-      { name: { contains: search, mode: insensitiveMode } },
-      { email: { contains: search, mode: insensitiveMode } },
+      { name: { contains: normalized, mode: insensitiveMode } },
+      { email: { contains: normalized, mode: insensitiveMode } },
     ];
 
     if (Object.values(Gender).includes(normalized as Gender)) {
@@ -25,46 +27,19 @@ export async function getUsers(
       orFilters.push({ role: { equals: normalized as Role } });
     }
 
-    whereClause = { OR: orFilters };
+    whereClause = { AND: [whereClause], OR: orFilters };
   }
 
   const orderBy: Prisma.UserOrderByWithRelationInput[] = [];
-  if (sortOptions?.sort_id) {
-    orderBy.push({
-      id: sortOptions.sort_id.toLowerCase() === "desc" ? "desc" : "asc",
-    });
-  }
-
-  if (sortOptions?.sort_name) {
-    orderBy.push({
-      name:
-        sortOptions.sort_name.toLowerCase() === "desc" ? "desc" : "asc",
-    });
-  }
-
-  if (sortOptions?.sort_email) {
-    orderBy.push({
-      email:
-        sortOptions.sort_email.toLowerCase() === "desc" ? "desc" : "asc",
-    });
-  }
-
-  if (sortOptions?.sort_gender) {
-    orderBy.push({
-      gender:
-        sortOptions.sort_gender.toLowerCase() === "desc" ? "desc" : "asc",
-    });
-  }
-
-  if (sortOptions?.sort_birth_date) {
-    orderBy.push({
-      birth_date:
-        sortOptions.sort_birth_date.toLowerCase() === "desc" ? "desc" : "asc",
-    });
-  }
+  if (sortOptions?.sort_id) orderBy.push({ id: sortOptions.sort_id.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_name) orderBy.push({ name: sortOptions.sort_name.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_email) orderBy.push({ email: sortOptions.sort_email.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_gender) orderBy.push({ gender: sortOptions.sort_gender.toLowerCase() === "desc" ? "desc" : "asc" });
+  if (sortOptions?.sort_birth_date) orderBy.push({ birth_date: sortOptions.sort_birth_date.toLowerCase() === "desc" ? "desc" : "asc" });
 
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
+
   try {
     const [data, count] = await Promise.all([
       prisma.user.findMany({
@@ -98,6 +73,7 @@ export async function getUsers(
   }
 }
 
+
 export async function getUsersByEmail(email: string) {
     return await prisma.user.findUnique({
         where: { email: email }
@@ -118,9 +94,10 @@ export async function createUsers(data: any) {
 }
 
 export async function deleteUsers(id: number) {
-    return await prisma.user.delete({
-        where: { id: id }
-    });
+  return await prisma.user.update({
+    where: { id },
+    data: { is_active: false },
+  });
 }
 
 export async function updateUser(id: number, data: any) {

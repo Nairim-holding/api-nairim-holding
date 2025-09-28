@@ -12,18 +12,19 @@ export class PropertyTypeController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
+    const includeInactive = req.query.includeInactive === "true"; 
 
-    const sort_id = req.query.sort_id as string;
-    const sort_description = req.query.sort_description as string;
+    const sortOptions = {
+      sort_id: req.query.sort_id as string,
+      sort_description: req.query.sort_description as string,
+    };
 
     try {
-      const propertysType = await getPropertysType(limit, page, search, {
-      sort_id,
-      sort_description,
-    });
+      const propertysType = await getPropertysType(limit, page, search, sortOptions, includeInactive);
       res.status(200).json(propertysType);
     } catch (error) {
-      res.status(500);
+      console.error("Erro ao buscar tipos de imóveis:", error);
+      res.status(500).json({ message: "Internal server error" });
     }
   }
 
