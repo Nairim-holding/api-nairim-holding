@@ -47,7 +47,7 @@ export class LeaseController {
             const lease = await createLease(req.body);
             res.status(200).json({
                 status: 200,
-                message: `Lease ${lease.contract_number} criada com sucesso!`
+                message: `Locação ${lease.contract_number} criada com sucesso!`
             });
         } catch (error) {
             console.error(error);
@@ -61,7 +61,7 @@ export class LeaseController {
             const lease = await updateLease(Number(id), req.body);
             res.status(200).json({
                 status: 200,
-                message: `Lease ${lease.contract_number} atualizada com sucesso!`
+                message: `Locação ${lease.contract_number} atualizada com sucesso!`
             });
         } catch (error) {
             console.error(error);
@@ -76,7 +76,7 @@ export class LeaseController {
             await deleteLeases(Number(id));
             res.status(200).json({
                 status: 200,
-                message: `Lease ${lease?.contract_number} desativada com sucesso.`
+                message: `Locação ${lease?.contract_number} desativada com sucesso.`
             });
         } catch (error) {
             console.error(error);
