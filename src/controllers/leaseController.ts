@@ -12,15 +12,15 @@ export class LeaseController {
     static async getLeases(req: Request, res: Response) {
         const limit = parseInt(req.query.limit as string) || 10;
         const page = parseInt(req.query.page as string) || 1;
-        const search = req.query.search as string;
-        const includeInactive = req.query.includeInactive === "true"; // Novo parâmetro
-        const sortOptions = {
-            sort_id: req.query.sort_id as string,
-            sort_contract_number: req.query.sort_contract_number as string,
-            sort_start_date: req.query.sort_start_date as string,
-            sort_end_date: req.query.sort_end_date as string,
-            sort_rent_amount: req.query.sort_rent_amount as string
-        };
+        const search = (req.query.search as string) || "";
+        const includeInactive = req.query.includeInactive === "true";
+
+        const sortOptions: Record<string, string> = {};
+        Object.entries(req.query).forEach(([key, value]) => {
+            if (key.startsWith("sort_") && typeof value === "string" && value.length > 0) {
+                sortOptions[key] = value;
+            }
+        });
 
         try {
             const leases = await getLeases(limit, page, search, sortOptions, includeInactive);
@@ -38,7 +38,7 @@ export class LeaseController {
             res.status(200).json(lease);
         } catch (error) {
             console.error(error);
-            res.status(500).json({ message: "Erro ao buscar Lease" });
+            res.status(500).json({ message: "Erro ao buscar locação" });
         }
     }
 
@@ -47,11 +47,11 @@ export class LeaseController {
             const lease = await createLease(req.body);
             res.status(200).json({
                 status: 200,
-                message: `Locação ${lease.contract_number} criada com sucesso!`
+                message: `Locação criada com sucesso!`
             });
         } catch (error) {
             console.error(error);
-            res.status(500).json({ message: `Erro ao criar Lease: ${error}` });
+            res.status(500).json({ message: `Erro ao criar locação: ${error}` });
         }
     }
 
@@ -65,7 +65,7 @@ export class LeaseController {
             });
         } catch (error) {
             console.error(error);
-            res.status(500).json({ message: `Erro ao atualizar Lease: ${error}` });
+            res.status(500).json({ message: `Erro ao atualizar locação: ${error}` });
         }
     }
 
@@ -76,11 +76,11 @@ export class LeaseController {
             await deleteLeases(Number(id));
             res.status(200).json({
                 status: 200,
-                message: `Locação ${lease?.contract_number} desativada com sucesso.`
+                message: `Locação desativada com sucesso.`
             });
         } catch (error) {
             console.error(error);
-            res.status(500).json({ message: "Erro ao desativar Lease" });
+            res.status(500).json({ message: "Erro ao desativar locação" });
         }
     }
 }

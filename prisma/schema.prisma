@@ -275,14 +275,14 @@ model Lease {
   end_date            DateTime
   status              LeaseStatus
   rent_amount         Decimal     @db.Decimal(10,2)
-  condo_fee           Decimal     @db.Decimal(10,2)
-  property_tax        Decimal     @db.Decimal(10,2)
-  extra_charges       Decimal     @db.Decimal(10,2)
-  agency_commission   String      @db.VarChar(10)
-  commission_amount   Decimal     @db.Decimal(10,2)
+  condo_fee           Decimal?    @db.Decimal(10,2)   
+  property_tax        Decimal?    @db.Decimal(10,2)     
+  extra_charges       Decimal?    @db.Decimal(10,2)   
+  agency_commission   String?     @db.VarChar(10)      
+  commission_amount   Decimal?    @db.Decimal(10,2)    
   rent_due_date       DateTime
-  tax_due_date        DateTime
-  condo_due_date      DateTime
+  tax_due_date        DateTime?                       
+  condo_due_date      DateTime?                     
   is_active           Boolean     @default(true)
 
   property            Property     @relation(fields: [property_id], references: [id])

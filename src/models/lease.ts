@@ -4,45 +4,108 @@ import { Prisma, LeaseStatus } from "@prisma/client";
 export async function getLeases(
   limit = 10,
   page = 1,
-  search?: string,
-  sortOptions?: { 
-    sort_id?: string;
-    sort_contract?: string;
-    sort_status?: string;
-    sort_start_date?: string;
-    sort_end_date?: string;
-    sort_rent_amount?: string;
-  },
+  search = "",
+  sortOptions: Record<string, string> = {},
   includeInactive = false
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
   let whereClause: Prisma.LeaseWhereInput = includeInactive ? {} : { is_active: true };
-
-  if (search) {
-    const normalized = search.toUpperCase().trim();
+  const statusPTtoEnum: Record<string, LeaseStatus> = {
+    "CONTRATO VENCIDO": "EXPIRED",
+    "CONTRATO VENCENDO": "EXPIRING",
+    "CONTRATO EM DIA": "UP_TO_DATE",
+  };
+  if (search?.trim()) {
+    const normalized = search.trim().toUpperCase();
 
     const orFilters: Prisma.LeaseWhereInput["OR"] = [
       { owner: { name: { contains: normalized, mode: insensitiveMode } } },
       { tenant: { name: { contains: normalized, mode: insensitiveMode } } },
       { property: { title: { contains: normalized, mode: insensitiveMode } } },
-      { status: { equals: normalized as any } }, // caso busque por status
     ];
 
-    if (!isNaN(Number(search))) {
-      orFilters.push({ contract_number: Number(search) });
+    if (statusPTtoEnum[normalized]) {
+      orFilters.push({ status: { equals: statusPTtoEnum[normalized] } });
+    }
+
+    if (!isNaN(Number(normalized))) {
+      orFilters.push({ contract_number: Number(normalized) });
     }
 
     whereClause = { AND: [whereClause], OR: orFilters };
   }
 
   const orderBy: Prisma.LeaseOrderByWithRelationInput[] = [];
-  if (sortOptions?.sort_id) orderBy.push({ id: sortOptions.sort_id.toLowerCase() === "desc" ? "desc" : "asc" });
-  if (sortOptions?.sort_contract) orderBy.push({ contract_number: sortOptions.sort_contract.toLowerCase() === "desc" ? "desc" : "asc" });
-  if (sortOptions?.sort_status) orderBy.push({ status: sortOptions.sort_status.toLowerCase() === "desc" ? "desc" : "asc" });
-  if (sortOptions?.sort_start_date) orderBy.push({ start_date: sortOptions.sort_start_date.toLowerCase() === "desc" ? "desc" : "asc" });
-  if (sortOptions?.sort_end_date) orderBy.push({ end_date: sortOptions.sort_end_date.toLowerCase() === "desc" ? "desc" : "asc" });
-  if (sortOptions?.sort_rent_amount) orderBy.push({ rent_amount: sortOptions.sort_rent_amount.toLowerCase() === "desc" ? "desc" : "asc" });
+
+  for (const [key, value] of Object.entries(sortOptions)) {
+    if (!value) continue;
+
+    const direction = value.toLowerCase() === "desc" ? "desc" : "asc";
+
+    switch (key) {
+      case "sort_id":
+        orderBy.push({ id: direction });
+        break;
+      case "sort_contract_number":
+        orderBy.push({ contract_number: direction });
+        break;
+      case "sort_start_date":
+        orderBy.push({ start_date: direction });
+        break;
+      case "sort_end_date":
+        orderBy.push({ end_date: direction });
+        break;
+      case "sort_status":
+        orderBy.push({ status: direction });
+        break;
+      case "sort_rent_amount":
+        orderBy.push({ rent_amount: direction });
+        break;
+      case "sort_condominium_fee":
+        orderBy.push({ condo_fee: direction });
+        break;
+      case "sort_iptu":
+        orderBy.push({ property_tax: direction });
+        break;
+      case "sort_extra_fees":
+        orderBy.push({ extra_charges: direction });
+        break;
+      case "sort_commission_percent":
+        orderBy.push({ agency_commission: direction });
+        break;
+      case "sort_commission_value":
+        orderBy.push({ commission_amount: direction });
+        break;
+      case "sort_due_rent":
+        orderBy.push({ rent_due_date: direction });
+        break;
+      case "sort_due_iptu":
+        orderBy.push({ tax_due_date: direction });
+        break;
+      case "sort_due_condominium":
+        orderBy.push({ condo_due_date: direction });
+        break;
+      case "sort_property":
+        orderBy.push({ property: { title: direction } });
+        break;
+      case "sort_type":
+        orderBy.push({ property: { type: { description: direction } } });
+        break;
+      case "sort_owner":
+        orderBy.push({ owner: { name: direction } });
+        break;
+      case "sort_tenant":
+        orderBy.push({ tenant: { name: direction } });
+        break;
+      default:
+        break;
+    }
+  }
+
+  if (orderBy.length === 0) {
+    orderBy.push({ id: "asc" });
+  }
 
   const take = limit > 0 ? limit : 10;
   const skip = (page - 1) * take;
@@ -53,7 +116,7 @@ export async function getLeases(
         where: whereClause,
         skip,
         take,
-        orderBy: orderBy.length > 0 ? orderBy : [{ id: "asc" }],
+        orderBy,
         select: {
           id: true,
           contract_number: true,
@@ -73,7 +136,7 @@ export async function getLeases(
           property: { select: { id: true, title: true, type: { select: { description: true } } } },
           owner: { select: { id: true, name: true } },
           tenant: { select: { id: true, name: true } },
-        }
+        },
       }),
       prisma.lease.count({ where: whereClause }),
     ]);
@@ -132,9 +195,9 @@ export async function createLease(data: any) {
       contract_number: Number(data.contract_number),
       start_date: new Date(data.start_date),
       end_date: new Date(data.end_date),
-      rent_due_date: new Date(data.rent_due_date),
-      tax_due_date: new Date(data.tax_due_date),
-      condo_due_date: new Date(data.condo_due_date),
+      rent_due_date: data.rent_due_date ? new Date(data.rent_due_date) : null,
+      tax_due_date: data.tax_due_date ? new Date(data.tax_due_date) : null,
+      condo_due_date: data.condo_due_date ? new Date(data.condo_due_date) : null,
     },
   });
 }
