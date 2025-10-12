@@ -49,6 +49,7 @@ model Agency {
 
   contacts               AgencyContact[]
   addresses              AgencyAddress[]
+  properties             Property[] // Relação com imóveis
 }
 
 model AgencyContact {
@@ -74,6 +75,7 @@ model AgencyAddress {
 model Property {
   id              Int         @id @default(autoincrement())
   owner_id        Int
+  agency_id       Int?        // NOVO CAMPO: Imobiliária responsável
   type_id         Int
   title           String
   bedrooms        Int
@@ -92,6 +94,7 @@ model Property {
   is_active       Boolean    @default(true)
 
   owner           Owner        @relation(fields: [owner_id], references: [id])
+  agency          Agency?      @relation(fields: [agency_id], references: [id])
   type            PropertyType @relation(fields: [type_id], references: [id])
   documents       Document[]
   addresses       PropertyAddress[]

@@ -24,6 +24,7 @@ export async function getPropertys(
       { notes: { contains: normalized, mode: insensitiveMode } },
       { owner: { is: { name: { contains: normalized, mode: insensitiveMode } } } },
       { type: { is: { description: { contains: normalized, mode: insensitiveMode } } } },
+      { agency: { is: { trade_name: { contains: normalized, mode: insensitiveMode } } } },
     ];
 
     whereClause = { AND: [whereClause], OR: orFilters };
@@ -51,22 +52,11 @@ export async function getPropertys(
         case "sort_type":
           orderBy.push({ type: { description: order } });
           break;
-        case "sort_bedrooms":
-        case "sort_bathrooms":
-        case "sort_half_bathrooms":
-        case "sort_garage_spaces":
-        case "sort_area_total":
-        case "sort_area_built":
-        case "sort_frontage":
-        case "sort_floor_number":
-        case "sort_furnished":
+        case "sort_agency":
+          orderBy.push({ agency: { trade_name: order } });
+          break;
+        default:
           orderBy.push({ [key.replace("sort_", "")]: order } as any);
-          break;
-        case "sort_tax_registration":
-          orderBy.push({ tax_registration: order });
-          break;
-        case "sort_notes":
-          orderBy.push({ notes: order });
           break;
       }
     });
@@ -81,6 +71,7 @@ export async function getPropertys(
         type: true,
         documents: true,
         values: true,
+        agency: true
       },
       skip,
       take,
@@ -88,22 +79,6 @@ export async function getPropertys(
     }),
     prisma.property.count({ where: whereClause }),
   ]);
-
-  const addrKeys = ["zip_code", "street", "district", "city", "state"];
-  if (sortOptions) {
-    addrKeys.forEach((key) => {
-      const sortKey = `sort_${key}`;
-      if (sortOptions[sortKey]) {
-        const order = sortOptions[sortKey].toLowerCase() === "desc" ? -1 : 1;
-        data.sort((a, b) => {
-          const aVal = a.addresses?.[0]?.address[key as keyof typeof a.addresses[0]["address"]];
-          const bVal = b.addresses?.[0]?.address[key as keyof typeof b.addresses[0]["address"]];
-          if (aVal == bVal) return 0;
-          return aVal > bVal ? order : -order;
-        });
-      }
-    });
-  }
 
   return {
     data,
@@ -125,7 +100,8 @@ export async function getPropertyById(id: number) {
       },
       owner: true,
       type: true,
-      documents: true
+      documents: true,
+      agency: true
     },
   });
 }
@@ -151,6 +127,7 @@ export async function createPropertys(data: any) {
         furnished,
         owner_id,
         type_id,
+        agency_id,
       } = {
         ...parsed,
         bedrooms: +parsed.bedrooms,
@@ -163,42 +140,15 @@ export async function createPropertys(data: any) {
         frontage: parseFloat(parsed.frontage),
         owner_id: +parsed.owner_id,
         type_id: +parsed.type_id,
-        furnished: parsed.furnished == "true",
-      };
-
-      const { zip_code, street, number, district, city, state, country } = {
-        ...parsedAddress,
-        number: +parsedAddress.number,
-      };
-
-      const {
-        sale_rules,
-        lease_rules,
-        purchase_value,
-        purchase_date,
-        property_tax,
-        rental_value,
-        condo_fee,
-        current_status,
-        sale_value,
-        sale_date,
-        extra_charges,
-      } = {
-        ...parsedValuesProperty,
-        purchase_value: parseFloat(parsedValuesProperty.purchase_value),
-        sale_value: parseFloat(parsedValuesProperty.sale_value) || 0,
-        rental_value: parseFloat(parsedValuesProperty.rental_value),
-        property_tax: parseFloat(parsedValuesProperty.property_tax),
-        condo_fee: parseFloat(parsedValuesProperty.condo_fee),
-        extra_charges: parseFloat(parsedValuesProperty.extra_charges) || 0,
-        sale_date: verifyDate(parsedValuesProperty.sale_date),
-        purchase_date: verifyDate(parsedValuesProperty.purchase_date),
+        agency_id: parsed.agency_id ? +parsed.agency_id : undefined,
+        furnished: parsed.furnished === "true",
       };
 
       const property = await tx.property.create({
         data: {
           owner_id,
           type_id,
+          agency_id,
           title,
           bedrooms,
           bathrooms,
@@ -217,46 +167,43 @@ export async function createPropertys(data: any) {
       if (parsedAddress) {
         const createdAddress = await tx.address.create({
           data: {
-            zip_code,
-            street,
-            number,
-            district,
-            city,
-            state,
-            country,
+            zip_code: parsedAddress.zip_code,
+            street: parsedAddress.street,
+            number: +parsedAddress.number,
+            district: parsedAddress.district,
+            city: parsedAddress.city,
+            state: parsedAddress.state,
+            country: parsedAddress.country,
           },
         });
 
         await tx.propertyAddress.create({
-          data: {
-            address_id: createdAddress.id,
-            property_id: property.id,
-          },
+          data: { address_id: createdAddress.id, property_id: property.id },
         });
       }
 
-      if (!purchase_date) {
-        throw new Error("Datas inválidas fornecidas. Verifique novamente!");
-      }
-
       if (parsedValuesProperty) {
-        const total = rental_value + property_tax + condo_fee + extra_charges;
+        const total = parseFloat(parsedValuesProperty.rental_value) +
+                      parseFloat(parsedValuesProperty.property_tax) +
+                      parseFloat(parsedValuesProperty.condo_fee) +
+                      (parseFloat(parsedValuesProperty.extra_charges) || 0);
+
         await tx.propertyValue.createMany({
           data: {
             property_id: property.id,
             total,
-            sale_rules,
-            sale_value,
-            lease_rules,
-            purchase_value,
-            current_status,
-            sale_date,
-            purchase_date,
-            condo_fee,
-            extra_charges,
+            sale_rules: parsedValuesProperty.sale_rules,
+            sale_value: parseFloat(parsedValuesProperty.sale_value) || 0,
+            lease_rules: parsedValuesProperty.lease_rules,
+            purchase_value: parseFloat(parsedValuesProperty.purchase_value),
+            current_status: parsedValuesProperty.current_status,
+            sale_date: parsedValuesProperty.sale_date ? new Date(parsedValuesProperty.sale_date) : null,
+            purchase_date: new Date(parsedValuesProperty.purchase_date),
+            condo_fee: parseFloat(parsedValuesProperty.condo_fee),
+            extra_charges: parseFloat(parsedValuesProperty.extra_charges) || 0,
             notes: parsedValuesProperty.notes,
-            property_tax,
-            rental_value,
+            property_tax: parseFloat(parsedValuesProperty.property_tax),
+            rental_value: parseFloat(parsedValuesProperty.rental_value),
           },
         });
       }
@@ -265,6 +212,121 @@ export async function createPropertys(data: any) {
     });
   } catch (error) {
     console.error("Erro ao criar propriedade:", error);
+    throw error;
+  }
+}
+
+export async function updatePropertys(id: number, data: any) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const parsed = JSON.parse(data.dataPropertys);
+      const parsedAddress = JSON.parse(data.addressProperty);
+      const parsedValuesProperty = JSON.parse(data.valuesProperty);
+
+      const {
+        title,
+        bedrooms,
+        bathrooms,
+        half_bathrooms,
+        garage_spaces,
+        floor_number,
+        area_total,
+        area_built,
+        frontage,
+        tax_registration,
+        furnished,
+        owner_id,
+        type_id,
+        agency_id,
+      } = {
+        ...parsed,
+        bedrooms: +parsed.bedrooms,
+        bathrooms: +parsed.bathrooms,
+        half_bathrooms: +parsed.half_bathrooms,
+        garage_spaces: +parsed.garage_spaces,
+        floor_number: +parsed.floor_number,
+        area_total: parseFloat(parsed.area_total),
+        area_built: parseFloat(parsed.area_built),
+        frontage: parseFloat(parsed.frontage),
+        owner_id: +parsed.owner_id,
+        type_id: +parsed.type_id,
+        agency_id: parsed.agency_id ? +parsed.agency_id : undefined,
+        furnished: parsed.furnished === "true",
+      };
+
+      const updatedProperty = await tx.property.update({
+        where: { id },
+        data: {
+          owner_id,
+          type_id,
+          agency_id,
+          title,
+          bedrooms,
+          bathrooms,
+          half_bathrooms,
+          garage_spaces,
+          area_total,
+          area_built,
+          frontage,
+          furnished,
+          floor_number,
+          tax_registration,
+          notes: parsed.notes,
+        },
+      });
+
+      if (parsedAddress) {
+        await tx.propertyAddress.deleteMany({ where: { property_id: id } });
+
+        const createdAddress = await tx.address.create({
+          data: {
+            zip_code: parsedAddress.zip_code,
+            street: parsedAddress.street,
+            number: +parsedAddress.number,
+            district: parsedAddress.district,
+            city: parsedAddress.city,
+            state: parsedAddress.state,
+            country: parsedAddress.country,
+          },
+        });
+
+        await tx.propertyAddress.create({
+          data: { address_id: createdAddress.id, property_id: id },
+        });
+      }
+
+      if (parsedValuesProperty) {
+        await tx.propertyValue.deleteMany({ where: { property_id: id } });
+
+        const total = parseFloat(parsedValuesProperty.rental_value) +
+                      parseFloat(parsedValuesProperty.property_tax) +
+                      parseFloat(parsedValuesProperty.condo_fee) +
+                      (parseFloat(parsedValuesProperty.extra_charges) || 0);
+
+        await tx.propertyValue.createMany({
+          data: {
+            property_id: id,
+            total,
+            sale_rules: parsedValuesProperty.sale_rules,
+            sale_value: parseFloat(parsedValuesProperty.sale_value) || 0,
+            lease_rules: parsedValuesProperty.lease_rules,
+            purchase_value: parseFloat(parsedValuesProperty.purchase_value),
+            current_status: parsedValuesProperty.current_status,
+            sale_date: parsedValuesProperty.sale_date ? new Date(parsedValuesProperty.sale_date) : null,
+            purchase_date: new Date(parsedValuesProperty.purchase_date),
+            condo_fee: parseFloat(parsedValuesProperty.condo_fee),
+            extra_charges: parseFloat(parsedValuesProperty.extra_charges) || 0,
+            notes: parsedValuesProperty.notes,
+            property_tax: parseFloat(parsedValuesProperty.property_tax),
+            rental_value: parseFloat(parsedValuesProperty.rental_value),
+          },
+        });
+      }
+
+      return updatedProperty;
+    });
+  } catch (error) {
+    console.error("Erro ao atualizar propriedade:", error);
     throw error;
   }
 }
@@ -301,149 +363,4 @@ export async function deletePropertys(id: number) {
       data: { is_active: false },
     });
   });
-}
-
-export async function updatePropertys(id: number, data: any) {
-  try {
-    return await prisma.$transaction(async (tx) => {
-      const parsed = JSON.parse(data.dataPropertys);
-      const parsedAddress = JSON.parse(data.addressProperty);
-      const parsedValuesProperty = JSON.parse(data.valuesProperty);
-
-      const {
-        title,
-        bedrooms,
-        bathrooms,
-        half_bathrooms,
-        garage_spaces,
-        floor_number,
-        area_total,
-        area_built,
-        frontage,
-        tax_registration,
-        furnished,
-        owner_id,
-        type_id,
-      } = {
-        ...parsed,
-        bedrooms: +parsed.bedrooms,
-        bathrooms: +parsed.bathrooms,
-        half_bathrooms: +parsed.half_bathrooms,
-        garage_spaces: +parsed.garage_spaces,
-        floor_number: +parsed.floor_number,
-        area_total: parseFloat(parsed.area_total),
-        area_built: parseFloat(parsed.area_built),
-        frontage: parseFloat(parsed.frontage),
-        owner_id: +parsed.owner_id,
-        type_id: +parsed.type_id,
-        furnished: parsed.furnished === "true",
-      };
-
-      const { zip_code, street, number, district, city, state, country } = {
-        ...parsedAddress,
-        number: +parsedAddress.number,
-      };
-
-      const {
-        sale_rules,
-        lease_rules,
-        purchase_value,
-        purchase_date,
-        property_tax,
-        rental_value,
-        condo_fee,
-        current_status,
-        sale_value,
-        sale_date,
-        extra_charges,
-      } = {
-        ...parsedValuesProperty,
-        purchase_value: parseFloat(parsedValuesProperty.purchase_value),
-        sale_value: parseFloat(parsedValuesProperty.sale_value),
-        rental_value: parseFloat(parsedValuesProperty.rental_value),
-        property_tax: parseFloat(parsedValuesProperty.property_tax),
-        condo_fee: parseFloat(parsedValuesProperty.condo_fee),
-        extra_charges: parseFloat(parsedValuesProperty.extra_charges),
-        sale_date: verifyDate(parsedValuesProperty.sale_date),
-        purchase_date: verifyDate(parsedValuesProperty.purchase_date),
-      };
-
-      // if (!sale_date || !purchase_date) {
-      //   throw new Error("Datas inválidas fornecidas. Verifique novamente!");
-      // }
-
-      const updatedProperty = await tx.property.update({
-        where: { id },
-        data: {
-          owner_id,
-          type_id,
-          title,
-          bedrooms,
-          bathrooms,
-          half_bathrooms,
-          garage_spaces,
-          area_total,
-          area_built,
-          frontage,
-          furnished,
-          floor_number,
-          tax_registration,
-          notes: parsed.notes,
-        },
-      });
-
-      if (parsedAddress) {
-        await tx.propertyAddress.deleteMany({ where: { property_id: id } });
-
-        const createdAddress = await tx.address.create({
-          data: {
-            zip_code,
-            street,
-            number,
-            district,
-            city,
-            state,
-            country,
-          },
-        });
-
-        await tx.propertyAddress.create({
-          data: {
-            address_id: createdAddress.id,
-            property_id: id,
-          },
-        });
-      }
-
-      if (parsedValuesProperty) {
-        await tx.propertyValue.deleteMany({ where: { property_id: id } });
-
-        const total = rental_value + property_tax + condo_fee + extra_charges;
-
-        await tx.propertyValue.createMany({
-          data: {
-            property_id: id,
-            total,
-            sale_rules,
-            sale_value,
-            lease_rules,
-            purchase_value,
-            current_status,
-            sale_date,
-            purchase_date,
-            condo_fee,
-            extra_charges,
-            notes: parsedValuesProperty.notes,
-            property_tax,
-            rental_value,
-          },
-        });
-      }
-
-      return updatedProperty;
-    });
-  } catch (error) {
-    console.error("Erro ao atualizar propriedade:", error);
-    throw error;
-  }
 }
