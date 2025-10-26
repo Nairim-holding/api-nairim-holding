@@ -60,6 +60,7 @@ function mapAddresses(rawAddresses: any[]): Address[] {
 
 async function fetchCoordinates(addresses: Address[], title: string) {
   const coords: { lat: number; lng: number; info: string }[] = [];
+
   for (const addr of addresses) {
     const fullAddress = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.state}, ${addr.country}`;
     try {
@@ -67,6 +68,7 @@ async function fetchCoordinates(addresses: Address[], title: string) {
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`
       );
       const data = await response.json();
+
       if (data && data[0]) {
         coords.push({
           lat: parseFloat(data[0].lat),
@@ -78,7 +80,29 @@ async function fetchCoordinates(addresses: Address[], title: string) {
       console.error("Erro ao obter coordenadas:", error);
     }
   }
+
   return coords;
+}
+
+function calcVariation(current: number, previous: number) {
+  if (previous === 0 || !isFinite(previous)) {
+    return {
+      result: Number(current.toFixed(2)),
+      variation: 0,
+      isPositive: current >= 0,
+    };
+  }
+
+  let variation = ((current - previous) / previous) * 100;
+
+  if (variation > 60) variation = 60;
+  if (variation < -60) variation = -60;
+
+  return {
+    result: Number(current.toFixed(2)),
+    variation: Number(variation.toFixed(2)),
+    isPositive: variation >= 0,
+  };
 }
 
 export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Date) {
@@ -122,27 +146,24 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     fetchProperties(prevStartDate, prevEndDate),
   ]);
 
-  const owners = await prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } } });
-  const prevOwners = await prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } });
+  const [owners, prevOwners] = await Promise.all([
+    prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
+    prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
+  ]);
 
-  const tenants = await prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } } });
-  const prevTenants = await prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } });
+  const [tenants, prevTenants] = await Promise.all([
+    prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
+    prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
+  ]);
 
-  const agencies = await prisma.agency.findMany({ where: { created_at: { gte: startDate, lte: endDate } } });
-  const prevAgencies = await prisma.agency.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } });
+  const [agencies, prevAgencies] = await Promise.all([
+    prisma.agency.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
+    prisma.agency.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
+  ]);
 
-  const calcVariation = (current: number, previous: number) => {
-    const variation = previous ? ((current - previous) / previous) * 100 : 0;
-    return {
-      result: current,
-      variation,
-      isPositive: variation >= 0
-    };
-  };
-
-  // MÉTRICAS FINANCEIRAS
   const allRentalValues = properties.flatMap(p => p.values?.map(v => v.rental_value) || []);
   const prevRentalValues = prevProperties.flatMap(p => p.values?.map(v => v.rental_value) || []);
+
   const averageRentalTicket = calcVariation(
     allRentalValues.length ? allRentalValues.reduce((a, b) => a + b, 0) / allRentalValues.length : 0,
     prevRentalValues.length ? prevRentalValues.reduce((a, b) => a + b, 0) / prevRentalValues.length : 0
@@ -157,18 +178,29 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
   const totalAcquisitionValueMetric = calcVariation(totalAcquisitionValue, prevTotalAcquisitionValue);
 
   const totalPropertyTaxAndCondoFee = calcVariation(
-    properties.reduce((acc, property) => acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0), 0),
-    prevProperties.reduce((acc, property) => acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0), 0)
+    properties.reduce(
+      (acc, property) =>
+        acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0),
+      0
+    ),
+    prevProperties.reduce(
+      (acc, property) =>
+        acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0),
+      0
+    )
   );
 
   const totalPotentialRentUnoccupied = properties.reduce(
-    (acc, property) => acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
+    (acc, property) =>
+      acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
     0
   );
   const prevTotalPotentialRentUnoccupied = prevProperties.reduce(
-    (acc, property) => acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
+    (acc, property) =>
+      acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
     0
   );
+
   const vacancyInMonths = calcVariation(
     averageRentalTicket.result ? totalPotentialRentUnoccupied / averageRentalTicket.result : 0,
     averageRentalTicket.result ? prevTotalPotentialRentUnoccupied / averageRentalTicket.result : 0
@@ -196,7 +228,23 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     prevProperties.length / (prevOwners.length || 1)
   );
 
-  // COORDENADAS
+  const availablePropertiesByType = Object.entries(
+    properties.reduce((acc: Record<string, number>, property) => {
+      const isAvailable = property.values?.[0]?.current_status === "AVAILABLE";
+      const type = property.type?.description || "Desconhecido";
+      if (isAvailable) acc[type] = (acc[type] || 0) + 1;
+      return acc;
+    }, {})
+  ).map(([name, value]) => ({ name, value }));
+
+  const propertiesByAgency = agencies.map((agency, index) => {
+    const count = properties.filter(p => p.agency?.id === agency.id).length;
+    return {
+      name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
+      value: count,
+    };
+  });
+
   const allCoords = await Promise.all(properties.map(p => fetchCoordinates(p.addresses || [], p.title)));
   const geolocationData = allCoords.flat();
 
@@ -218,6 +266,8 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     owners,
     tenants,
     agencies,
-    geolocationData
+    geolocationData,
+    availablePropertiesByType,
+    propertiesByAgency,
   };
 }
