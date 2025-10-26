@@ -36,7 +36,7 @@ enum DocumentType {
 }
 
 model Agency {
-  id                     Int    @id @default(autoincrement())
+  id                     Int      @id @default(autoincrement())
   trade_name             String
   legal_name             String
   cnpj                   String   @db.VarChar(18)
@@ -44,73 +44,79 @@ model Agency {
   municipal_registration Int
   license_number         String   @db.VarChar(20)
   created_at             DateTime @default(now())
-  updated_at             DateTime @updatedAt
+  updated_at             DateTime? @updatedAt
   is_active              Boolean  @default(true)
 
   contacts               AgencyContact[]
   addresses              AgencyAddress[]
-  properties             Property[] // Relação com imóveis
+  properties             Property[]
 }
 
 model AgencyContact {
-  id         Int     @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   contact_id Int
   agency_id  Int
-  is_active  Boolean @default(true)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime? @updatedAt
 
   contact    Contact @relation(fields: [contact_id], references: [id])
   agency     Agency  @relation(fields: [agency_id], references: [id])
 }
 
 model AgencyAddress {
-  id         Int     @id @default(autoincrement())
+  id         Int      @id @default(autoincrement())
   address_id Int
   agency_id  Int
-  is_active  Boolean @default(true)
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime? @updatedAt
 
   address    Address @relation(fields: [address_id], references: [id])
   agency     Agency  @relation(fields: [agency_id], references: [id])
 }
 
 model Property {
-  id              Int         @id @default(autoincrement())
-  owner_id        Int
-  agency_id       Int?        // NOVO CAMPO: Imobiliária responsável
-  type_id         Int
-  title           String
-  bedrooms        Int
-  bathrooms       Int
-  half_bathrooms  Int
-  garage_spaces   Int
-  area_total      Float
-  area_built      Float
-  frontage        Float
-  furnished       Boolean
-  floor_number    Int
+  id               Int         @id @default(autoincrement())
+  owner_id         Int
+  agency_id        Int?
+  type_id          Int
+  title            String
+  bedrooms         Int
+  bathrooms        Int
+  half_bathrooms   Int
+  garage_spaces    Int
+  area_total       Float
+  area_built       Float
+  frontage         Float
+  furnished        Boolean
+  floor_number     Int
   tax_registration String    @db.VarChar(20)
-  notes           String?
-  created_at      DateTime   @default(now())
-  updated_at      DateTime   @updatedAt
-  is_active       Boolean    @default(true)
+  notes            String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime? @updatedAt
+  is_active        Boolean   @default(true)
 
-  owner           Owner        @relation(fields: [owner_id], references: [id])
-  agency          Agency?      @relation(fields: [agency_id], references: [id])
-  type            PropertyType @relation(fields: [type_id], references: [id])
-  documents       Document[]
-  addresses       PropertyAddress[]
-  favorites       Favorite[]
-  leases          Lease[]
-  values          PropertyValue[]
+  owner            Owner        @relation(fields: [owner_id], references: [id])
+  agency           Agency?      @relation(fields: [agency_id], references: [id])
+  type             PropertyType @relation(fields: [type_id], references: [id])
+  documents        Document[]
+  addresses        PropertyAddress[]
+  favorites        Favorite[]
+  leases           Lease[]
+  values           PropertyValue[]
 }
 
 model PropertyAddress {
-  id          Int       @id @default(autoincrement())
+  id          Int      @id @default(autoincrement())
   address_id  Int
   property_id Int
-  is_active   Boolean   @default(true)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime? @updatedAt
 
-  address     Address   @relation(fields: [address_id], references: [id])
-  property    Property  @relation(fields: [property_id], references: [id])
+  address     Address  @relation(fields: [address_id], references: [id])
+  property    Property @relation(fields: [property_id], references: [id])
 }
 
 model Document {
@@ -121,7 +127,7 @@ model Document {
   description String?
   type        DocumentType
   created_at  DateTime    @default(now())
-  updated_at  DateTime    @updatedAt
+  updated_at  DateTime?   @updatedAt
   created_by  Int
   is_active   Boolean     @default(true)
 
@@ -138,7 +144,7 @@ model User {
   gender      Gender
   role        Role       @default(ADMIN)
   created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
+  updated_at  DateTime?  @updatedAt
   is_active   Boolean    @default(true)
 
   favorites   Favorite[]
@@ -155,7 +161,7 @@ model Address {
   state      String    @db.VarChar(50)
   country    String    @db.VarChar(50)
   created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  updated_at DateTime? @updatedAt
   is_active  Boolean   @default(true)
 
   propertyAddresses PropertyAddress[]
@@ -172,7 +178,7 @@ model Contact {
   email      String
   whatsapp   Boolean
   created_at DateTime  @default(now())
-  updated_at DateTime  @updatedAt
+  updated_at DateTime? @updatedAt
   is_active  Boolean   @default(true)
 
   agencyContacts    AgencyContact[]
@@ -185,7 +191,7 @@ model Favorite {
   user_id     Int
   property_id Int
   created_at  DateTime   @default(now())
-  updated_at  DateTime   @updatedAt
+  updated_at  DateTime?  @updatedAt
   is_active   Boolean    @default(true)
 
   user       User      @relation(fields: [user_id], references: [id])
@@ -202,6 +208,8 @@ model Owner {
   cpf                    String     @db.VarChar(14)
   state_registration     Int
   municipal_registration Int
+  created_at             DateTime   @default(now())
+  updated_at             DateTime?  @updatedAt
   is_active              Boolean    @default(true)
 
   properties             Property[]
@@ -215,6 +223,8 @@ model OwnerAddress {
   address_id  Int
   owner_id    Int
   is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
 
   address     Address  @relation(fields: [address_id], references: [id])
   owner       Owner    @relation(fields: [owner_id], references: [id])
@@ -225,6 +235,8 @@ model OwnerContact {
   contact_id  Int
   owner_id    Int
   is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
 
   contact     Contact  @relation(fields: [contact_id], references: [id])
   owner       Owner    @relation(fields: [owner_id], references: [id])
@@ -240,6 +252,8 @@ model Tenant {
   cpf                    String     @db.VarChar(14)
   state_registration     Int
   municipal_registration Int
+  created_at             DateTime   @default(now())
+  updated_at             DateTime?  @updatedAt
   is_active              Boolean     @default(true)
 
   addresses    TenantAddress[]
@@ -252,6 +266,8 @@ model TenantAddress {
   address_id  Int
   tenant_id   Int
   is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
 
   address     Address  @relation(fields: [address_id], references: [id])
   tenant      Tenant   @relation(fields: [tenant_id], references: [id])
@@ -262,6 +278,8 @@ model TenantContact {
   contact_id  Int
   tenant_id   Int
   is_active   Boolean   @default(true)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime? @updatedAt
 
   contact     Contact  @relation(fields: [contact_id], references: [id])
   tenant      Tenant   @relation(fields: [tenant_id], references: [id])
@@ -278,14 +296,16 @@ model Lease {
   end_date            DateTime
   status              LeaseStatus
   rent_amount         Decimal     @db.Decimal(10,2)
-  condo_fee           Decimal?    @db.Decimal(10,2)   
-  property_tax        Decimal?    @db.Decimal(10,2)     
-  extra_charges       Decimal?    @db.Decimal(10,2)   
-  agency_commission   String?     @db.VarChar(10)      
-  commission_amount   Decimal?    @db.Decimal(10,2)    
+  condo_fee           Decimal?    @db.Decimal(10,2)
+  property_tax        Decimal?    @db.Decimal(10,2)
+  extra_charges       Decimal?    @db.Decimal(10,2)
+  agency_commission   String?     @db.VarChar(10)
+  commission_amount   Decimal?    @db.Decimal(10,2)
   rent_due_date       DateTime
-  tax_due_date        DateTime?                       
-  condo_due_date      DateTime?                     
+  tax_due_date        DateTime?
+  condo_due_date      DateTime?
+  created_at          DateTime    @default(now())
+  updated_at          DateTime?   @updatedAt
   is_active           Boolean     @default(true)
 
   property            Property     @relation(fields: [property_id], references: [id])
@@ -298,7 +318,7 @@ model PropertyValue {
   id                 Int         @id @default(autoincrement())
   property_id        Int
   purchase_value     Decimal     @db.Decimal(10,2)
-  purchase_date      DateTime    
+  purchase_date      DateTime
   sale_value         Decimal?    @db.Decimal(10,2)
   sale_date          DateTime?
   rental_value       Decimal     @db.Decimal(10,2)
@@ -310,6 +330,8 @@ model PropertyValue {
   lease_rules        String?     @db.VarChar(100)
   sale_rules         String?     @db.VarChar(100)
   notes              String?     @db.VarChar(100)
+  created_at         DateTime    @default(now())
+  updated_at         DateTime?   @updatedAt
   is_active          Boolean     @default(true)
 
   property           Property    @relation(fields: [property_id], references: [id])
@@ -318,6 +340,8 @@ model PropertyValue {
 model PropertyType {
   id          Int        @id @default(autoincrement())
   description String
+  created_at  DateTime   @default(now())
+  updated_at  DateTime?  @updatedAt
   is_active   Boolean    @default(true)
 
   properties  Property[]

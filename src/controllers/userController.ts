@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { createUsers, getUsers, updateUser, deleteUsers, getUserById } from "../models/user";
+import { createUsers, getUsers, updateUser, deleteUsers, getUserById, getUserFilterOptions } from "../models/user";
 import bcrypt from 'bcrypt';
 
 export class UserController {
@@ -8,18 +8,25 @@ export class UserController {
     const limit = parseInt(req.query.limit as string) || 10;
     const page = parseInt(req.query.page as string) || 1;
     const search = req.query.search as string;
-    const includeInactive = req.query.includeInactive === "true"; 
+    const includeInactive = req.query.includeInactive === "true";
 
-    const sortOptions = {
-        sort_id: req.query.sort_id as string,
-        sort_name: req.query.sort_name as string,
-        sort_email: req.query.sort_email as string,
-        sort_gender: req.query.sort_gender as string,
-        sort_birth_date: req.query.sort_birth_date as string,
-    };
+    const sortOptions: Record<string, string> = {};
+    Object.entries(req.query).forEach(([key, value]) => {
+        if (key.startsWith("sort_")) sortOptions[key] = value as string;
+    });
+
+    const filters: Record<string, any> = {};
+    Object.entries(req.query).forEach(([key, value]) => {
+        if (
+        !["limit", "page", "search", "includeInactive"].includes(key) &&
+        !key.startsWith("sort_")
+        ) {
+        filters[key] = value;
+        }
+    });
 
     try {
-        const users = await getUsers(limit, page, search, sortOptions, includeInactive);
+        const users = await getUsers(limit, page, search, sortOptions, includeInactive, filters);
         res.status(200).json(users);
     } catch (error) {
         console.error("Erro ao buscar usuários:", error);
@@ -37,6 +44,15 @@ export class UserController {
         }
     }
     
+    static async getUserFilters(req: Request, res: Response) {
+        try {
+        const filters = await getUserFilterOptions();
+        res.status(200).json(filters);
+        } catch (error) {
+        console.error("Erro ao buscar filtros de usuário:", error);
+        res.status(500).json({ message: "Erro interno no servidor" });
+        }
+    }
 
     static async createUser(req: Request, res: Response) {
         const { name, email, password, birth_date, gender } = req.body;

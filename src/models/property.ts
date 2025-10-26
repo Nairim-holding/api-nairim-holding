@@ -10,7 +10,8 @@ export async function getPropertys(
   page = 1,
   search?: string,
   sortOptions?: Record<string, string>,
-  includeInactive = false 
+  includeInactive = false,
+  filters: Record<string, string> = {}
 ) {
   const insensitiveMode: Prisma.QueryMode = "insensitive";
 
@@ -26,8 +27,49 @@ export async function getPropertys(
       { type: { is: { description: { contains: normalized, mode: insensitiveMode } } } },
       { agency: { is: { trade_name: { contains: normalized, mode: insensitiveMode } } } },
     ];
-
     whereClause = { AND: [whereClause], OR: orFilters };
+  }
+
+  const andFilters: Prisma.PropertyWhereInput[] = [];
+
+  for (const [key, value] of Object.entries(filters)) {
+    if (!value) continue;
+
+    switch (key) {
+      case "city":
+        andFilters.push({ addresses: { some: { address: { city: { contains: value, mode: insensitiveMode } } } } });
+        break;
+      case "state":
+        andFilters.push({ addresses: { some: { address: { state: { equals: value, mode: insensitiveMode } } } } });
+        break;
+      case "type_id":
+        andFilters.push({ type_id: Number(value) });
+        break;
+      case "owner_id":
+        andFilters.push({ owner_id: Number(value) });
+        break;
+      case "furnished":
+        andFilters.push({ furnished: value === "true" });
+        break;
+      case "bedrooms":
+      case "bathrooms":
+      case "garage_spaces":
+      case "area_total":
+      case "area_built":
+        andFilters.push({ [key]: Number(value) });
+        break;
+      default:
+        if (!isNaN(Number(value))) {
+          andFilters.push({ [key]: Number(value) });
+        } else {
+          andFilters.push({ [key]: { contains: value, mode: insensitiveMode } });
+        }
+        break;
+    }
+  }
+
+  if (andFilters.length > 0) {
+    whereClause = { AND: [whereClause, ...andFilters] };
   }
 
   const take = limit > 0 ? limit : 10;
@@ -38,14 +80,7 @@ export async function getPropertys(
     Object.entries(sortOptions).forEach(([key, value]) => {
       if (!value) return;
       const order = value.toLowerCase() === "desc" ? "desc" : "asc";
-
       switch (key) {
-        case "sort_id":
-          orderBy.push({ id: order });
-          break;
-        case "sort_title":
-          orderBy.push({ title: order });
-          break;
         case "sort_owner":
           orderBy.push({ owner: { name: order } });
           break;
@@ -57,7 +92,6 @@ export async function getPropertys(
           break;
         default:
           orderBy.push({ [key.replace("sort_", "")]: order } as any);
-          break;
       }
     });
   }

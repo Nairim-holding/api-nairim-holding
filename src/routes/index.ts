@@ -10,9 +10,10 @@ import favorite from './favorite';
 import propertyType from './propertyType';
 import propertyValues from './propertyValues';
 import cep from './cep';
+import dashboard from './dashboard'
 
 const routes = (app: Express) => {
-  app.use(express.json(), user, authenticate, agency, property, tenant, owner, lease, favorite, propertyType, propertyValues, cep);
+  app.use(express.json(), user, authenticate, agency, property, tenant, owner, lease, favorite, propertyType, propertyValues, cep, dashboard);
 };
 
 
