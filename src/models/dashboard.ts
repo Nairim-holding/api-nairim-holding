@@ -1,10 +1,6 @@
 import prisma from "../../prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
-// ==========================
-// ======= HELPERS =========
-// ==========================
-
 const decimalToNumber = (v: Decimal | number | null | undefined) =>
   v == null ? 0 : v instanceof Decimal ? v.toNumber() : Number(v);
 
@@ -21,10 +17,6 @@ const calcVariation = (current: number, previous: number) => {
   };
 };
 
-// ==========================
-// ======= GEO UTILS ========
-// ==========================
-
 async function fetchCoordinatesBatch(
   addresses: {
     street?: string;
@@ -34,7 +26,7 @@ async function fetchCoordinatesBatch(
     country?: string;
     title: string;
   }[],
-  concurrency = 3 // reduzir para evitar bloqueio do Nominatim
+  concurrency = 3
 ) {
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
   const results: { lat: number; lng: number; info: string }[] = [];
@@ -60,7 +52,6 @@ async function fetchCoordinatesBatch(
         return;
       }
 
-      // Garantir que o retorno é JSON
       const text = await res.text();
       let data: any;
       try {
@@ -81,7 +72,6 @@ async function fetchCoordinatesBatch(
       }
     } catch (err) {
       console.error("❌ Erro coordenadas:", err);
-      // retry leve em caso de erro de rede
       await delay(1000);
       return worker(addr);
     } finally {
@@ -90,7 +80,7 @@ async function fetchCoordinatesBatch(
   }
 
   for (const addr of addresses) {
-    while (active >= concurrency) await delay(300); // throttle mais lento
+    while (active >= concurrency) await delay(300); 
     active++;
     worker(addr);
   }
@@ -99,18 +89,11 @@ async function fetchCoordinatesBatch(
   return results;
 }
 
-// ==========================
-// ====== MAIN FUNC =========
-// ==========================
-
 export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Date) {
   const diffMs = endDate.getTime() - startDate.getTime();
   const prevStartDate = new Date(startDate.getTime() - diffMs - 1);
   const prevEndDate = new Date(startDate.getTime() - 1);
 
-  // -------------------------------
-  // Consultas Prisma em paralelo
-  // -------------------------------
   const [
     properties,
     prevProperties,
@@ -188,9 +171,6 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     }),
   ]);
 
-  // -------------------------------
-  // Processamentos
-  // -------------------------------
   const toNum = (v: any) => decimalToNumber(v);
 
   const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
@@ -279,7 +259,6 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     value: properties.filter((p) => p.agency?.id === agency.id).length,
   }));
 
-  // ======== GEOLOC ========
   const flattenedAddresses = properties.flatMap((p) =>
     p.addresses.map((a) => ({
       ...a.address,
