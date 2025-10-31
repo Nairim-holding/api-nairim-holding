@@ -26,8 +26,15 @@ const calcVariation = (current: number, previous: number) => {
 // ==========================
 
 async function fetchCoordinatesBatch(
-  addresses: { street?: string; number?: string; city?: string; state?: string; country?: string; title: string }[],
-  concurrency = 5
+  addresses: {
+    street?: string;
+    number?: string;
+    city?: string;
+    state?: string;
+    country?: string;
+    title: string;
+  }[],
+  concurrency = 3 // reduzir para evitar bloqueio do Nominatim
 ) {
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
   const results: { lat: number; lng: number; info: string }[] = [];
@@ -35,32 +42,60 @@ async function fetchCoordinatesBatch(
 
   async function worker(addr: any) {
     const fullAddress = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.state}, ${addr.country}`;
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+      fullAddress
+    )}`;
+
     try {
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`
-      );
-      const data = await res.json();
-      if (data?.[0]) {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "MeuSistemaImobiliario/1.0 (https://seudominio.com)",
+          "Accept-Language": "pt-BR",
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        console.warn("⚠️ Falha ao buscar coordenadas:", res.status, res.statusText);
+        return;
+      }
+
+      // Garantir que o retorno é JSON
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.warn("⚠️ Resposta inválida (HTML retornado pelo Nominatim)");
+        return;
+      }
+
+      if (Array.isArray(data) && data.length > 0) {
         results.push({
           lat: parseFloat(data[0].lat),
           lng: parseFloat(data[0].lon),
           info: `${addr.title} (${addr.city}/${addr.state})`,
         });
+      } else {
+        console.warn("⚠️ Nenhum resultado de coordenadas:", fullAddress);
       }
     } catch (err) {
-      console.error("Erro coordenadas:", err);
+      console.error("❌ Erro coordenadas:", err);
+      // retry leve em caso de erro de rede
+      await delay(1000);
+      return worker(addr);
     } finally {
       active--;
     }
   }
 
   for (const addr of addresses) {
-    while (active >= concurrency) await delay(100); // throttle
+    while (active >= concurrency) await delay(300); // throttle mais lento
     active++;
     worker(addr);
   }
 
-  while (active > 0) await delay(200);
+  while (active > 0) await delay(500);
   return results;
 }
 
@@ -74,81 +109,94 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
   const prevEndDate = new Date(startDate.getTime() - 1);
 
   // -------------------------------
-  // Rodar todas as consultas Prisma em paralelo
+  // Consultas Prisma em paralelo
   // -------------------------------
-  const [properties, prevProperties, owners, prevOwners, tenants, prevTenants, agencies, prevAgencies] =
-    await Promise.all([
-      prisma.property.findMany({
-        where: { created_at: { gte: startDate, lte: endDate } },
-        select: {
-          id: true,
-          title: true,
-          area_total: true,
-          type: { select: { description: true } },
-          values: {
-            select: {
-              rental_value: true,
-              property_tax: true,
-              condo_fee: true,
-              purchase_value: true,
-              sale_value: true,
-              current_status: true,
-            },
+  const [
+    properties,
+    prevProperties,
+    owners,
+    prevOwners,
+    tenants,
+    prevTenants,
+    agencies,
+    prevAgencies,
+  ] = await Promise.all([
+    prisma.property.findMany({
+      where: { created_at: { gte: startDate, lte: endDate } },
+      select: {
+        id: true,
+        title: true,
+        area_total: true,
+        type: { select: { description: true } },
+        values: {
+          select: {
+            rental_value: true,
+            property_tax: true,
+            condo_fee: true,
+            purchase_value: true,
+            sale_value: true,
+            current_status: true,
           },
-          addresses: {
-            select: {
-              address: {
-                select: { street: true, number: true, city: true, state: true, country: true },
-              },
-            },
-          },
-          documents: { select: { file_type: true } },
-          agency: { select: { id: true, legal_name: true, trade_name: true } },
         },
-      }),
-      prisma.property.findMany({
-        where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
-        select: {
-          id: true,
-          title: true,
-          values: {   select: {
-    rental_value: true,
-    property_tax: true, // adicionar
-    condo_fee: true,    // adicionar
-    purchase_value: true,
-    sale_value: true,
-    current_status: true,
-  }, },
-          documents: { select: { file_type: true } },
-          type: { select: { description: true } },
-          agency: { select: { id: true } },
-          addresses: {
-            select: {
-              address: { select: { street: true, number: true, city: true, state: true, country: true } },
+        addresses: {
+          select: {
+            address: {
+              select: { street: true, number: true, city: true, state: true, country: true },
             },
           },
         },
-      }),
-      prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
-      prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
-      prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
-      prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
-      prisma.agency.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true, legal_name: true, trade_name: true } }),
-      prisma.agency.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
-    ]);
+        documents: { select: { file_type: true } },
+        agency: { select: { id: true, legal_name: true, trade_name: true } },
+      },
+    }),
+    prisma.property.findMany({
+      where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
+      select: {
+        id: true,
+        title: true,
+        values: {
+          select: {
+            rental_value: true,
+            property_tax: true,
+            condo_fee: true,
+            purchase_value: true,
+            sale_value: true,
+            current_status: true,
+          },
+        },
+        documents: { select: { file_type: true } },
+        type: { select: { description: true } },
+        agency: { select: { id: true } },
+        addresses: {
+          select: {
+            address: { select: { street: true, number: true, city: true, state: true, country: true } },
+          },
+        },
+      },
+    }),
+    prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
+    prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+    prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
+    prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+    prisma.agency.findMany({
+      where: { created_at: { gte: startDate, lte: endDate } },
+      select: { id: true, legal_name: true, trade_name: true },
+    }),
+    prisma.agency.findMany({
+      where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
+      select: { id: true },
+    }),
+  ]);
 
   // -------------------------------
-  // Processamentos leves
+  // Processamentos
   // -------------------------------
-
   const toNum = (v: any) => decimalToNumber(v);
 
   const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
   const prevRentals = prevProperties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
-  const avgRental =
-    rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
-  const prevAvgRental =
-    prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
+  const avgRental = rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
+  const prevAvgRental = prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
 
   const averageRentalTicket = calcVariation(avgRental, prevAvgRental);
 
@@ -231,6 +279,7 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     value: properties.filter((p) => p.agency?.id === agency.id).length,
   }));
 
+  // ======== GEOLOC ========
   const flattenedAddresses = properties.flatMap((p) =>
     p.addresses.map((a) => ({
       ...a.address,
@@ -238,8 +287,10 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
       title: p.title,
     }))
   );
-  const geolocationData = await fetchCoordinatesBatch(flattenedAddresses, 5);
 
+  const geolocationData = await fetchCoordinatesBatch(flattenedAddresses, 3);
+
+  // ======== RETORNO ========
   return {
     averageRentalTicket,
     totalRentalActive,
