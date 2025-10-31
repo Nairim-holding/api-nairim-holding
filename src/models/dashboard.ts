@@ -1,226 +1,215 @@
 import prisma from "../../prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
-interface PropertyValue {
-  rental_value: number;
-  current_status?: "AVAILABLE" | "OCCUPIED";
-  property_tax?: number;
-  condo_fee?: number;
-  purchase_value?: number;
-  sale_value?: number;
-}
+// ==========================
+// ======= HELPERS =========
+// ==========================
 
-interface Address {
-  street?: string;
-  number?: string;
-  city?: string;
-  state?: string;
-  country?: string;
-}
+const decimalToNumber = (v: Decimal | number | null | undefined) =>
+  v == null ? 0 : v instanceof Decimal ? v.toNumber() : Number(v);
 
-interface Document {
-  file_type: string;
-}
+const calcVariation = (current: number, previous: number) => {
+  if (previous === 0 || !isFinite(previous)) {
+    return { result: +current.toFixed(2), variation: 0, isPositive: current >= 0 };
+  }
+  let variation = ((current - previous) / previous) * 100;
+  variation = Math.max(Math.min(variation, 60), -60);
+  return {
+    result: +current.toFixed(2),
+    variation: +variation.toFixed(2),
+    isPositive: variation >= 0,
+  };
+};
 
-interface Agency {
-  id: number;
-  legal_name?: string;
-}
+// ==========================
+// ======= GEO UTILS ========
+// ==========================
 
-interface PropertyType {
-  description?: string;
-}
+async function fetchCoordinatesBatch(
+  addresses: { street?: string; number?: string; city?: string; state?: string; country?: string; title: string }[],
+  concurrency = 5
+) {
+  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
+  const results: { lat: number; lng: number; info: string }[] = [];
+  let active = 0;
 
-interface Property {
-  id: number;
-  title: string;
-  type?: PropertyType;
-  area_total?: number;
-  values?: PropertyValue[];
-  addresses?: Address[];
-  documents?: Document[];
-  agency?: Agency | null;
-}
-
-function decimalToNumber(value: Decimal | number | null | undefined): number {
-  if (value == null) return 0;
-  if (value instanceof Decimal) return value.toNumber();
-  return Number(value);
-}
-
-function mapAddresses(rawAddresses: any[]): Address[] {
-  return rawAddresses.map(a => ({
-    street: a.address?.street,
-    number: a.address?.number,
-    city: a.address?.city,
-    state: a.address?.state,
-    country: a.address?.country,
-  }));
-}
-
-async function fetchCoordinates(addresses: Address[], title: string) {
-  const coords: { lat: number; lng: number; info: string }[] = [];
-
-  for (const addr of addresses) {
+  async function worker(addr: any) {
     const fullAddress = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.state}, ${addr.country}`;
     try {
-      const response = await fetch(
+      const res = await fetch(
         `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`
       );
-      const data = await response.json();
-
-      if (data && data[0]) {
-        coords.push({
+      const data = await res.json();
+      if (data?.[0]) {
+        results.push({
           lat: parseFloat(data[0].lat),
           lng: parseFloat(data[0].lon),
-          info: `${title} (${addr.city}/${addr.state})`,
+          info: `${addr.title} (${addr.city}/${addr.state})`,
         });
       }
-    } catch (error) {
-      console.error("Erro ao obter coordenadas:", error);
+    } catch (err) {
+      console.error("Erro coordenadas:", err);
+    } finally {
+      active--;
     }
   }
 
-  return coords;
-}
-
-function calcVariation(current: number, previous: number) {
-  if (previous === 0 || !isFinite(previous)) {
-    return {
-      result: Number(current.toFixed(2)),
-      variation: 0,
-      isPositive: current >= 0,
-    };
+  for (const addr of addresses) {
+    while (active >= concurrency) await delay(100); // throttle
+    active++;
+    worker(addr);
   }
 
-  let variation = ((current - previous) / previous) * 100;
-
-  if (variation > 60) variation = 60;
-  if (variation < -60) variation = -60;
-
-  return {
-    result: Number(current.toFixed(2)),
-    variation: Number(variation.toFixed(2)),
-    isPositive: variation >= 0,
-  };
+  while (active > 0) await delay(200);
+  return results;
 }
+
+// ==========================
+// ====== MAIN FUNC =========
+// ==========================
 
 export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Date) {
   const diffMs = endDate.getTime() - startDate.getTime();
   const prevStartDate = new Date(startDate.getTime() - diffMs - 1);
   const prevEndDate = new Date(startDate.getTime() - 1);
 
-  async function fetchProperties(start: Date, end: Date) {
-    const rawProperties = await prisma.property.findMany({
-      where: { created_at: { gte: start, lte: end } },
-      include: {
-        values: true,
-        addresses: { include: { address: true } },
-        agency: true,
-        documents: true,
-        type: true,
-      },
-    });
+  // -------------------------------
+  // Rodar todas as consultas Prisma em paralelo
+  // -------------------------------
+  const [properties, prevProperties, owners, prevOwners, tenants, prevTenants, agencies, prevAgencies] =
+    await Promise.all([
+      prisma.property.findMany({
+        where: { created_at: { gte: startDate, lte: endDate } },
+        select: {
+          id: true,
+          title: true,
+          area_total: true,
+          type: { select: { description: true } },
+          values: {
+            select: {
+              rental_value: true,
+              property_tax: true,
+              condo_fee: true,
+              purchase_value: true,
+              sale_value: true,
+              current_status: true,
+            },
+          },
+          addresses: {
+            select: {
+              address: {
+                select: { street: true, number: true, city: true, state: true, country: true },
+              },
+            },
+          },
+          documents: { select: { file_type: true } },
+          agency: { select: { id: true, legal_name: true, trade_name: true } },
+        },
+      }),
+      prisma.property.findMany({
+        where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
+        select: {
+          id: true,
+          title: true,
+          values: {   select: {
+    rental_value: true,
+    property_tax: true, // adicionar
+    condo_fee: true,    // adicionar
+    purchase_value: true,
+    sale_value: true,
+    current_status: true,
+  }, },
+          documents: { select: { file_type: true } },
+          type: { select: { description: true } },
+          agency: { select: { id: true } },
+          addresses: {
+            select: {
+              address: { select: { street: true, number: true, city: true, state: true, country: true } },
+            },
+          },
+        },
+      }),
+      prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
+      prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+      prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
+      prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+      prisma.agency.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true, legal_name: true, trade_name: true } }),
+      prisma.agency.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+    ]);
 
-    return rawProperties.map(p => ({
-      id: p.id,
-      title: p.title,
-      type: p.type ? { description: p.type.description } : undefined,
-      area_total: p.area_total,
-      values: p.values?.map(v => ({
-        rental_value: decimalToNumber(v.rental_value),
-        current_status: v.current_status as "AVAILABLE" | "OCCUPIED",
-        property_tax: decimalToNumber(v.property_tax),
-        condo_fee: decimalToNumber(v.condo_fee),
-        purchase_value: decimalToNumber(v.purchase_value),
-        sale_value: decimalToNumber(v.sale_value),
-      })),
-      addresses: mapAddresses(p.addresses),
-      documents: p.documents?.map(d => ({ file_type: d.file_type })),
-      agency: p.agency ? { id: p.agency.id, legal_name: p.agency.legal_name } : null,
-    }));
-  }
+  // -------------------------------
+  // Processamentos leves
+  // -------------------------------
 
-  const [properties, prevProperties] = await Promise.all([
-    fetchProperties(startDate, endDate),
-    fetchProperties(prevStartDate, prevEndDate),
-  ]);
+  const toNum = (v: any) => decimalToNumber(v);
 
-  const [owners, prevOwners] = await Promise.all([
-    prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
-    prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
-  ]);
+  const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
+  const prevRentals = prevProperties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
+  const avgRental =
+    rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
+  const prevAvgRental =
+    prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
 
-  const [tenants, prevTenants] = await Promise.all([
-    prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
-    prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
-  ]);
+  const averageRentalTicket = calcVariation(avgRental, prevAvgRental);
 
-  const [agencies, prevAgencies] = await Promise.all([
-    prisma.agency.findMany({ where: { created_at: { gte: startDate, lte: endDate } } }),
-    prisma.agency.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } } }),
-  ]);
-
-  const allRentalValues = properties.flatMap(p => p.values?.map(v => v.rental_value) || []);
-  const prevRentalValues = prevProperties.flatMap(p => p.values?.map(v => v.rental_value) || []);
-
-  const averageRentalTicket = calcVariation(
-    allRentalValues.length ? allRentalValues.reduce((a, b) => a + b, 0) / allRentalValues.length : 0,
-    prevRentalValues.length ? prevRentalValues.reduce((a, b) => a + b, 0) / prevRentalValues.length : 0
+  const totalRentalActive = calcVariation(
+    properties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
+    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0)
   );
 
-  const totalRentalActive = properties.reduce((acc, p) => acc + (p.values?.[0]?.rental_value || 0), 0);
-  const prevTotalRentalActive = prevProperties.reduce((acc, p) => acc + (p.values?.[0]?.rental_value || 0), 0);
-  const totalRentalActiveMetric = calcVariation(totalRentalActive, prevTotalRentalActive);
-
-  const totalAcquisitionValue = properties.reduce((acc, p) => acc + (p.values?.[0]?.purchase_value || 0), 0);
-  const prevTotalAcquisitionValue = prevProperties.reduce((acc, p) => acc + (p.values?.[0]?.purchase_value || 0), 0);
-  const totalAcquisitionValueMetric = calcVariation(totalAcquisitionValue, prevTotalAcquisitionValue);
+  const totalAcquisitionValue = calcVariation(
+    properties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
+    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0)
+  );
 
   const totalPropertyTaxAndCondoFee = calcVariation(
     properties.reduce(
-      (acc, property) =>
-        acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0),
+      (a, p) =>
+        a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
       0
     ),
     prevProperties.reduce(
-      (acc, property) =>
-        acc + (property.values?.reduce((s, v) => s + (v.property_tax || 0) + (v.condo_fee || 0), 0) ?? 0),
+      (a, p) =>
+        a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
       0
     )
   );
 
   const totalPotentialRentUnoccupied = properties.reduce(
-    (acc, property) =>
-      acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
+    (a, p) =>
+      a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
     0
   );
+
   const prevTotalPotentialRentUnoccupied = prevProperties.reduce(
-    (acc, property) =>
-      acc + (property.values?.[0]?.current_status === "AVAILABLE" ? property.values?.[0]?.rental_value || 0 : 0),
+    (a, p) =>
+      a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
     0
   );
 
   const vacancyInMonths = calcVariation(
-    averageRentalTicket.result ? totalPotentialRentUnoccupied / averageRentalTicket.result : 0,
-    averageRentalTicket.result ? prevTotalPotentialRentUnoccupied / averageRentalTicket.result : 0
+    avgRental ? totalPotentialRentUnoccupied / avgRental : 0,
+    avgRental ? prevTotalPotentialRentUnoccupied / avgRental : 0
   );
 
   const financialVacancyRate = calcVariation(
-    totalRentalActive ? (totalPotentialRentUnoccupied / totalRentalActive) * 100 : 0,
-    prevTotalRentalActive ? (prevTotalPotentialRentUnoccupied / prevTotalRentalActive) * 100 : 0
+    totalRentalActive.result
+      ? (totalPotentialRentUnoccupied / totalRentalActive.result) * 100
+      : 0,
+    totalRentalActive.result
+      ? (prevTotalPotentialRentUnoccupied / totalRentalActive.result) * 100
+      : 0
   );
 
   const totalPropertys = calcVariation(properties.length, prevProperties.length);
-
   const countPropertiesWithLessThan3Docs = calcVariation(
-    properties.filter(p => (p.documents?.filter(d => d.file_type === "application/pdf") ?? []).length < 3).length,
-    prevProperties.filter(p => (p.documents?.filter(d => d.file_type === "application/pdf") ?? []).length < 3).length
+    properties.filter((p) => (p.documents?.length || 0) < 3).length,
+    prevProperties.filter((p) => (p.documents?.length || 0) < 3).length
   );
 
   const totalPropertiesWithSaleValue = calcVariation(
-    properties.filter(p => p.values?.some(v => (v.sale_value || 0) > 0)).length,
-    prevProperties.filter(p => p.values?.some(v => (v.sale_value || 0) > 0)).length
+    properties.filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0)).length,
+    prevProperties.filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0)).length
   );
 
   const propertiesPerOwner = calcVariation(
@@ -229,29 +218,32 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
   );
 
   const availablePropertiesByType = Object.entries(
-    properties.reduce((acc: Record<string, number>, property) => {
-      const isAvailable = property.values?.[0]?.current_status === "AVAILABLE";
-      const type = property.type?.description || "Desconhecido";
+    properties.reduce((acc: Record<string, number>, p) => {
+      const isAvailable = p.values?.[0]?.current_status === "AVAILABLE";
+      const type = p.type?.description || "Desconhecido";
       if (isAvailable) acc[type] = (acc[type] || 0) + 1;
       return acc;
     }, {})
   ).map(([name, value]) => ({ name, value }));
 
-  const propertiesByAgency = agencies.map((agency, index) => {
-    const count = properties.filter(p => p.agency?.id === agency.id).length;
-    return {
-      name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
-      value: count,
-    };
-  });
+  const propertiesByAgency = agencies.map((agency) => ({
+    name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
+    value: properties.filter((p) => p.agency?.id === agency.id).length,
+  }));
 
-  const allCoords = await Promise.all(properties.map(p => fetchCoordinates(p.addresses || [], p.title)));
-  const geolocationData = allCoords.flat();
+  const flattenedAddresses = properties.flatMap((p) =>
+    p.addresses.map((a) => ({
+      ...a.address,
+      number: a.address.number?.toString(),
+      title: p.title,
+    }))
+  );
+  const geolocationData = await fetchCoordinatesBatch(flattenedAddresses, 5);
 
   return {
     averageRentalTicket,
-    totalRentalActive: totalRentalActiveMetric,
-    totalAcquisitionValue: totalAcquisitionValueMetric,
+    totalRentalActive,
+    totalAcquisitionValue,
     financialVacancyRate,
     totalPropertyTaxAndCondoFee,
     vacancyInMonths,
@@ -262,12 +254,8 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     tenantsTotal: calcVariation(tenants.length, prevTenants.length),
     propertiesPerOwner,
     agenciesTotal: calcVariation(agencies.length, prevAgencies.length),
-    properties,
-    owners,
-    tenants,
-    agencies,
-    geolocationData,
     availablePropertiesByType,
     propertiesByAgency,
+    geolocationData,
   };
 }
