@@ -288,8 +288,6 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     }))
   );
 
-  const geolocationData = await fetchCoordinatesBatch(flattenedAddresses, 3);
-
   // ======== RETORNO ========
   return {
     averageRentalTicket,
@@ -307,6 +305,25 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     agenciesTotal: calcVariation(agencies.length, prevAgencies.length),
     availablePropertiesByType,
     propertiesByAgency,
-    geolocationData,
   };
+}
+
+export async function fetchDashboardGeolocation(startDate: Date, endDate: Date) {
+  const properties = await prisma.property.findMany({
+    where: { created_at: { gte: startDate, lte: endDate } },
+    select: {
+      title: true,
+      addresses: {
+        select: {
+          address: { select: { street: true, number: true, city: true, state: true, country: true } },
+        },
+      },
+    },
+  });
+
+  const flattenedAddresses = properties.flatMap((p) =>
+    p.addresses.map((a) => ({ ...a.address, number: a.address.number?.toString(), title: p.title }))
+  );
+
+  return await fetchCoordinatesBatch(flattenedAddresses, 3);
 }

@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { fetchDashboardMetricsByPeriod } from "../models/dashboard";
+import { fetchDashboardGeolocation, fetchDashboardMetricsByPeriod } from "../models/dashboard";
 
 export class DashboardController {
   static async getMetrics(req: Request, res: Response) {
@@ -22,4 +22,18 @@ export class DashboardController {
       res.status(500).json({ error: "Erro ao buscar métricas" });
     }
   }
+  static async getGeolocation(req: Request, res: Response) {
+    try {
+      const { startDate, endDate } = req.query;
+      const geoloc = await fetchDashboardGeolocation(
+        new Date(startDate as string),
+        new Date(endDate as string)
+      );
+      res.json(geoloc);
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: "Erro ao buscar geolocalização" });
+    }
+  }
+
 }
