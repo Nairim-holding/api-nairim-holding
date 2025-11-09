@@ -4,9 +4,14 @@ import { Decimal } from "@prisma/client/runtime/library";
 const decimalToNumber = (v: Decimal | number | null | undefined) =>
   v == null ? 0 : v instanceof Decimal ? v.toNumber() : Number(v);
 
-const calcVariation = (current: number, previous: number) => {
+const calcVariation = (current: number, previous: number, data?: any[]) => {
   if (previous === 0 || !isFinite(previous)) {
-    return { result: +current.toFixed(2), variation: 0, isPositive: current >= 0 };
+    return { 
+      result: +current.toFixed(2), 
+      variation: 0, 
+      isPositive: current >= 0,
+      data: data || []
+    };
   }
   let variation = ((current - previous) / previous) * 100;
   variation = Math.max(Math.min(variation, 60), -60);
@@ -14,6 +19,7 @@ const calcVariation = (current: number, previous: number) => {
     result: +current.toFixed(2),
     variation: +variation.toFixed(2),
     isPositive: variation >= 0,
+    data: data || []
   };
 };
 
@@ -157,13 +163,25 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
         },
       },
     }),
-    prisma.owner.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
-    prisma.owner.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
-    prisma.tenant.findMany({ where: { created_at: { gte: startDate, lte: endDate } }, select: { id: true } }),
-    prisma.tenant.findMany({ where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, select: { id: true } }),
+    prisma.owner.findMany({ 
+      where: { created_at: { gte: startDate, lte: endDate } }, 
+      select: { id: true, name: true, created_at: true } 
+    }),
+    prisma.owner.findMany({ 
+      where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, 
+      select: { id: true } 
+    }),
+    prisma.tenant.findMany({ 
+      where: { created_at: { gte: startDate, lte: endDate } }, 
+      select: { id: true, name: true, created_at: true } 
+    }),
+    prisma.tenant.findMany({ 
+      where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, 
+      select: { id: true } 
+    }),
     prisma.agency.findMany({
       where: { created_at: { gte: startDate, lte: endDate } },
-      select: { id: true, legal_name: true, trade_name: true },
+      select: { id: true, legal_name: true, trade_name: true, created_at: true },
     }),
     prisma.agency.findMany({
       where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
@@ -173,21 +191,215 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
 
   const toNum = (v: any) => decimalToNumber(v);
 
+  // ======== DADOS DETALHADOS ========
+
+  // Documentações pendentes (menos de 3 documentos)
+  const propertiesWithLessThan3Docs = properties
+    .filter((p) => (p.documents?.length || 0) < 3)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      documentCount: p.documents?.length || 0,
+      documents: p.documents?.map(d => ({ file_type: d.file_type })) || [],
+      type: p.type?.description || "Desconhecido",
+    }));
+
+  const prevPropertiesWithLessThan3Docs = prevProperties
+    .filter((p) => (p.documents?.length || 0) < 3)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      documentCount: p.documents?.length || 0,
+    }));
+
+  // Propriedades disponíveis
+  const availableProperties = properties
+    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE")
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      type: p.type?.description || "Desconhecido",
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+      areaTotal: toNum(p.area_total),
+      agency: p.agency ? {
+        id: p.agency.id,
+        tradeName: p.agency.trade_name,
+        legalName: p.agency.legal_name,
+      } : null,
+    }));
+
+  // Propriedades com valor de venda
+  const propertiesWithSaleValue = properties
+    .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      saleValue: toNum(p.values?.[0]?.sale_value),
+      type: p.type?.description || "Desconhecido",
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+    }));
+
+  const prevPropertiesWithSaleValue = prevProperties
+    .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      saleValue: toNum(p.values?.[0]?.sale_value),
+    }));
+
+  // Aluguéis ativos
+  const rentalActiveProperties = properties
+    .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "AVAILABLE")
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+      status: p.values?.[0]?.current_status,
+      type: p.type?.description || "Desconhecido",
+      agency: p.agency ? {
+        id: p.agency.id,
+        tradeName: p.agency.trade_name,
+      } : null,
+    }));
+
+  const prevRentalActiveProperties = prevProperties
+    .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "OCCUPIED")
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+    }));
+
+  // Propriedades com taxas e condomínio
+  const propertiesWithTaxAndCondo = properties
+    .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      propertyTax: toNum(p.values?.[0]?.property_tax),
+      condoFee: toNum(p.values?.[0]?.condo_fee),
+      totalTaxAndCondo: toNum(p.values?.[0]?.property_tax) + toNum(p.values?.[0]?.condo_fee),
+      type: p.type?.description || "Desconhecido",
+    }));
+
+  const prevPropertiesWithTaxAndCondo = prevProperties
+    .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      propertyTax: toNum(p.values?.[0]?.property_tax),
+      condoFee: toNum(p.values?.[0]?.condo_fee),
+    }));
+
+  // Propriedades com valor de aquisição
+  const propertiesWithAcquisitionValue = properties
+    .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      purchaseValue: toNum(p.values?.[0]?.purchase_value),
+      type: p.type?.description || "Desconhecido",
+      currentStatus: p.values?.[0]?.current_status,
+    }));
+
+  const prevPropertiesWithAcquisitionValue = prevProperties
+    .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      purchaseValue: toNum(p.values?.[0]?.purchase_value),
+    }));
+
+  // Propriedades com potencial de aluguel não ocupadas
+  const propertiesWithRentPotential = properties
+    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+      type: p.type?.description || "Desconhecido",
+      areaTotal: toNum(p.area_total),
+    }));
+
+  const prevPropertiesWithRentPotential = prevProperties
+    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
+    .map((p) => ({
+      id: p.id,
+      title: p.title,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+    }));
+
+  // Todas as propriedades do período
+  const allPropertiesDetails = properties.map((p) => ({
+    id: p.id,
+    title: p.title,
+    type: p.type?.description || "Desconhecido",
+    status: p.values?.[0]?.current_status,
+    rentalValue: toNum(p.values?.[0]?.rental_value),
+    saleValue: toNum(p.values?.[0]?.sale_value),
+    areaTotal: toNum(p.area_total),
+    documentCount: p.documents?.length || 0,
+    agency: p.agency ? {
+      id: p.agency.id,
+      tradeName: p.agency.trade_name,
+    } : null,
+  }));
+
+  const prevAllPropertiesDetails = prevProperties.map((p) => ({
+    id: p.id,
+    title: p.title,
+    type: p.type?.description || "Desconhecido",
+    status: p.values?.[0]?.current_status,
+  }));
+
+  // Proprietários do período
+  const ownersDetails = owners.map((owner) => ({
+    id: owner.id,
+    name: owner.name,
+    createdAt: owner.created_at,
+  }));
+
+  // Inquilinos do período
+  const tenantsDetails = tenants.map((tenant) => ({
+    id: tenant.id,
+    name: tenant.name,
+    createdAt: tenant.created_at,
+  }));
+
+  // Agências do período
+  const agenciesDetails = agencies.map((agency) => ({
+    id: agency.id,
+    legalName: agency.legal_name,
+    tradeName: agency.trade_name,
+    createdAt: agency.created_at,
+  }));
+
+  // ======== CÁLCULOS DAS MÉTRICAS ========
+
   const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
   const prevRentals = prevProperties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
   const avgRental = rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
   const prevAvgRental = prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
 
-  const averageRentalTicket = calcVariation(avgRental, prevAvgRental);
+  const averageRentalTicket = calcVariation(avgRental, prevAvgRental, 
+    properties.map(p => ({
+      id: p.id,
+      title: p.title,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+      type: p.type?.description || "Desconhecido",
+    }))
+  );
 
   const totalRentalActive = calcVariation(
     properties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
-    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0)
+    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
+    rentalActiveProperties
   );
 
   const totalAcquisitionValue = calcVariation(
     properties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
-    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0)
+    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
+    propertiesWithAcquisitionValue
   );
 
   const totalPropertyTaxAndCondoFee = calcVariation(
@@ -200,7 +412,8 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
       (a, p) =>
         a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
       0
-    )
+    ),
+    propertiesWithTaxAndCondo
   );
 
   const totalPotentialRentUnoccupied = properties.reduce(
@@ -217,7 +430,8 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
 
   const vacancyInMonths = calcVariation(
     avgRental ? totalPotentialRentUnoccupied / avgRental : 0,
-    avgRental ? prevTotalPotentialRentUnoccupied / avgRental : 0
+    avgRental ? prevTotalPotentialRentUnoccupied / avgRental : 0,
+    propertiesWithRentPotential
   );
 
   const financialVacancyRate = calcVariation(
@@ -226,23 +440,57 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
       : 0,
     totalRentalActive.result
       ? (prevTotalPotentialRentUnoccupied / totalRentalActive.result) * 100
-      : 0
+      : 0,
+    propertiesWithRentPotential
   );
 
-  const totalPropertys = calcVariation(properties.length, prevProperties.length);
+  const totalPropertys = calcVariation(
+    properties.length, 
+    prevProperties.length,
+    allPropertiesDetails
+  );
+
   const countPropertiesWithLessThan3Docs = calcVariation(
-    properties.filter((p) => (p.documents?.length || 0) < 3).length,
-    prevProperties.filter((p) => (p.documents?.length || 0) < 3).length
+    propertiesWithLessThan3Docs.length,
+    prevPropertiesWithLessThan3Docs.length,
+    propertiesWithLessThan3Docs
   );
 
   const totalPropertiesWithSaleValue = calcVariation(
-    properties.filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0)).length,
-    prevProperties.filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0)).length
+    propertiesWithSaleValue.length,
+    prevPropertiesWithSaleValue.length,
+    propertiesWithSaleValue
+  );
+
+  const ownersTotal = calcVariation(
+    owners.length, 
+    prevOwners.length,
+    ownersDetails
+  );
+
+  const tenantsTotal = calcVariation(
+    tenants.length, 
+    prevTenants.length,
+    tenantsDetails
   );
 
   const propertiesPerOwner = calcVariation(
     properties.length / (owners.length || 1),
-    prevProperties.length / (prevOwners.length || 1)
+    prevProperties.length / (prevOwners.length || 1),
+    ownersDetails.map(owner => ({
+      ...owner,
+      propertiesCount: properties.filter(p => 
+        // Aqui você precisaria ajustar para relacionar propriedades com proprietários
+        // Isso é um exemplo - você precisará adaptar baseado no seu schema
+        true // placeholder
+      ).length
+    }))
+  );
+
+  const agenciesTotal = calcVariation(
+    agencies.length, 
+    prevAgencies.length,
+    agenciesDetails
   );
 
   const availablePropertiesByType = Object.entries(
@@ -252,23 +500,29 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
       if (isAvailable) acc[type] = (acc[type] || 0) + 1;
       return acc;
     }, {})
-  ).map(([name, value]) => ({ name, value }));
-
-  const propertiesByAgency = agencies.map((agency) => ({
-    name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
-    value: properties.filter((p) => p.agency?.id === agency.id).length,
+  ).map(([name, value]) => ({ 
+    name, 
+    value,
+    data: availableProperties.filter(p => p.type === name)
   }));
 
-  const flattenedAddresses = properties.flatMap((p) =>
-    p.addresses.map((a) => ({
-      ...a.address,
-      number: a.address.number?.toString(),
-      title: p.title,
-    }))
-  );
+  const propertiesByAgency = agencies.map((agency) => {
+    const agencyProperties = properties.filter((p) => p.agency?.id === agency.id);
+    return {
+      name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
+      value: agencyProperties.length,
+      data: agencyProperties.map(p => ({
+        id: p.id,
+        title: p.title,
+        type: p.type?.description || "Desconhecido",
+        status: p.values?.[0]?.current_status,
+      }))
+    };
+  });
 
-  // ======== RETORNO ========
+  // ======== RETORNO COMPLETO ========
   return {
+    // Métricas principais com dados internos
     averageRentalTicket,
     totalRentalActive,
     totalAcquisitionValue,
@@ -278,10 +532,10 @@ export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Da
     totalPropertys,
     countPropertiesWithLessThan3Docs,
     totalPropertiesWithSaleValue,
-    ownersTotal: calcVariation(owners.length, prevOwners.length),
-    tenantsTotal: calcVariation(tenants.length, prevTenants.length),
+    ownersTotal,
+    tenantsTotal,
     propertiesPerOwner,
-    agenciesTotal: calcVariation(agencies.length, prevAgencies.length),
+    agenciesTotal,
     availablePropertiesByType,
     propertiesByAgency,
   };
