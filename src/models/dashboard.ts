@@ -1,10 +1,138 @@
 import prisma from "../../prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 
-const decimalToNumber = (v: Decimal | number | null | undefined) =>
+// Interfaces para tipagem forte
+interface MetricWithData {
+  result: number;
+  variation: number;
+  isPositive: boolean;
+  data: any[];
+}
+
+interface ChartData {
+  name: string;
+  value: number;
+  data: any[];
+}
+
+interface DashboardMetricsResponse {
+  averageRentalTicket: MetricWithData;
+  totalRentalActive: MetricWithData;
+  totalAcquisitionValue: MetricWithData;
+  financialVacancyRate: MetricWithData;
+  totalPropertyTaxAndCondoFee: MetricWithData;
+  vacancyInMonths: MetricWithData;
+  totalProperties: MetricWithData;
+  countPropertiesWithLessThan3Docs: MetricWithData;
+  totalPropertiesWithSaleValue: MetricWithData;
+  ownersTotal: MetricWithData;
+  tenantsTotal: MetricWithData;
+  propertiesPerOwner: MetricWithData;
+  agenciesTotal: MetricWithData;
+  availablePropertiesByType: ChartData[];
+  propertiesByAgency: ChartData[];
+}
+
+interface PropertyDetails {
+  id: number;
+  title: string;
+  type: string;
+  status?: string;
+  rentalValue: number;
+  saleValue: number;
+  areaTotal: number;
+  documentCount: number;
+  agency?: { id: number; tradeName: string };
+}
+
+// Cache para geolocalização
+const geolocationCache = new Map<string, { lat: number; lng: number; info: string }>();
+
+// Rate Limiter para API de geolocalização
+class RateLimitedGeocoder {
+  private requests = 0;
+  private lastReset = Date.now();
+  private readonly MAX_REQUESTS_PER_MINUTE = 50;
+  
+  async fetchWithRateLimit(address: any): Promise<{ lat: number; lng: number; info: string } | null> {
+    const now = Date.now();
+    if (now - this.lastReset >= 60000) { // 1 minute
+      this.requests = 0;
+      this.lastReset = now;
+    }
+    
+    if (this.requests >= this.MAX_REQUESTS_PER_MINUTE) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return this.fetchWithRateLimit(address); // Retry after delay
+    }
+    
+    this.requests++;
+    return await this.fetchCoordinates(address);
+  }
+
+  private async fetchCoordinates(addr: any): Promise<{ lat: number; lng: number; info: string } | null> {
+    const fullAddress = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.state}, ${addr.country}`;
+    
+    // Check cache first
+    const cacheKey = fullAddress.toLowerCase();
+    if (geolocationCache.has(cacheKey)) {
+      return geolocationCache.get(cacheKey)!;
+    }
+
+    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fullAddress)}`;
+
+    try {
+      const res = await fetch(url, {
+        headers: {
+          "User-Agent": "MeuSistemaImobiliario/1.0 (https://seudominio.com)",
+          "Accept-Language": "pt-BR",
+          Accept: "application/json",
+        },
+      });
+
+      if (!res.ok) {
+        console.warn("⚠️ Falha ao buscar coordenadas:", res.status, res.statusText);
+        return null;
+      }
+
+      const text = await res.text();
+      let data: any;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        console.warn("⚠️ Resposta inválida (HTML retornado pelo Nominatim)");
+        return null;
+      }
+
+      if (Array.isArray(data) && data.length > 0) {
+        const result = {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+          info: `${addr.title} (${addr.city}/${addr.state})`,
+        };
+        
+        // Cache the result
+        geolocationCache.set(cacheKey, result);
+        return result;
+      } else {
+        console.warn("⚠️ Nenhum resultado de coordenadas:", fullAddress);
+        return null;
+      }
+    } catch (err) {
+      console.error("❌ Erro coordenadas:", err);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      return this.fetchCoordinates(addr); // Retry on error
+    }
+  }
+}
+
+const geocoder = new RateLimitedGeocoder();
+
+// Utilitários
+const decimalToNumber = (v: Decimal | number | null | undefined): number =>
   v == null ? 0 : v instanceof Decimal ? v.toNumber() : Number(v);
 
-const calcVariation = (current: number, previous: number, data?: any[]) => {
+const calcVariation = (current: number, previous: number, data?: any[]): MetricWithData => {
   if (previous === 0 || !isFinite(previous)) {
     return { 
       result: +current.toFixed(2), 
@@ -23,6 +151,18 @@ const calcVariation = (current: number, previous: number, data?: any[]) => {
   };
 };
 
+// Validação de intervalo de datas
+function validateDateRange(startDate: Date, endDate: Date): void {
+  if (startDate > endDate) {
+    throw new Error('Start date cannot be after end date');
+  }
+  
+  const maxRange = 365 * 24 * 60 * 60 * 1000; // 1 year in milliseconds
+  if (endDate.getTime() - startDate.getTime() > maxRange) {
+    throw new Error('Date range cannot exceed 1 year');
+  }
+}
+
 async function fetchCoordinatesBatch(
   addresses: {
     street?: string;
@@ -33,56 +173,17 @@ async function fetchCoordinatesBatch(
     title: string;
   }[],
   concurrency = 3
-) {
+): Promise<{ lat: number; lng: number; info: string }[]> {
   const delay = (ms: number) => new Promise((res) => setTimeout(res, ms));
   const results: { lat: number; lng: number; info: string }[] = [];
   let active = 0;
 
   async function worker(addr: any) {
-    const fullAddress = `${addr.street}, ${addr.number}, ${addr.city}, ${addr.state}, ${addr.country}`;
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-      fullAddress
-    )}`;
-
-    try {
-      const res = await fetch(url, {
-        headers: {
-          "User-Agent": "MeuSistemaImobiliario/1.0 (https://seudominio.com)",
-          "Accept-Language": "pt-BR",
-          Accept: "application/json",
-        },
-      });
-
-      if (!res.ok) {
-        console.warn("⚠️ Falha ao buscar coordenadas:", res.status, res.statusText);
-        return;
-      }
-
-      const text = await res.text();
-      let data: any;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.warn("⚠️ Resposta inválida (HTML retornado pelo Nominatim)");
-        return;
-      }
-
-      if (Array.isArray(data) && data.length > 0) {
-        results.push({
-          lat: parseFloat(data[0].lat),
-          lng: parseFloat(data[0].lon),
-          info: `${addr.title} (${addr.city}/${addr.state})`,
-        });
-      } else {
-        console.warn("⚠️ Nenhum resultado de coordenadas:", fullAddress);
-      }
-    } catch (err) {
-      console.error("❌ Erro coordenadas:", err);
-      await delay(1000);
-      return worker(addr);
-    } finally {
-      active--;
+    const result = await geocoder.fetchWithRateLimit(addr);
+    if (result) {
+      results.push(result);
     }
+    active--;
   }
 
   for (const addr of addresses) {
@@ -95,468 +196,551 @@ async function fetchCoordinatesBatch(
   return results;
 }
 
-export async function fetchDashboardMetricsByPeriod(startDate: Date, endDate: Date) {
-  const diffMs = endDate.getTime() - startDate.getTime();
-  const prevStartDate = new Date(startDate.getTime() - diffMs - 1);
-  const prevEndDate = new Date(startDate.getTime() - 1);
+export async function fetchDashboardMetricsByPeriod(
+  startDate: Date, 
+  endDate: Date
+): Promise<DashboardMetricsResponse> {
+  try {
+    // Validar intervalo de datas
+    validateDateRange(startDate, endDate);
 
-  const [
-    properties,
-    prevProperties,
-    owners,
-    prevOwners,
-    tenants,
-    prevTenants,
-    agencies,
-    prevAgencies,
-  ] = await Promise.all([
-    prisma.property.findMany({
-      where: { created_at: { gte: startDate, lte: endDate } },
-      select: {
-        id: true,
-        title: true,
-        area_total: true,
-        type: { select: { description: true } },
-        values: {
-          select: {
-            rental_value: true,
-            property_tax: true,
-            condo_fee: true,
-            purchase_value: true,
-            sale_value: true,
-            current_status: true,
-          },
+    const diffMs = endDate.getTime() - startDate.getTime();
+    const prevStartDate = new Date(startDate.getTime() - diffMs - 1);
+    const prevEndDate = new Date(startDate.getTime() - 1);
+
+    const [
+      properties,
+      prevProperties,
+      owners,
+      prevOwners,
+      tenants,
+      prevTenants,
+      agencies,
+      prevAgencies,
+    ] = await Promise.all([
+      prisma.property.findMany({
+        where: { 
+          created_at: { gte: startDate, lte: endDate },
+          is_active: true 
         },
-        addresses: {
-          select: {
-            address: {
-              select: { street: true, number: true, city: true, state: true, country: true },
+        select: {
+          id: true,
+          title: true,
+          area_total: true,
+          type: { select: { description: true } },
+          values: {
+            where: { is_active: true },
+            select: {
+              rental_value: true,
+              property_tax: true,
+              condo_fee: true,
+              purchase_value: true,
+              sale_value: true,
+              current_status: true,
             },
           },
-        },
-        documents: { select: { file_type: true } },
-        agency: { select: { id: true, legal_name: true, trade_name: true } },
-      },
-    }),
-    prisma.property.findMany({
-      where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
-      select: {
-        id: true,
-        title: true,
-        values: {
-          select: {
-            rental_value: true,
-            property_tax: true,
-            condo_fee: true,
-            purchase_value: true,
-            sale_value: true,
-            current_status: true,
+          addresses: {
+            where: { is_active: true },
+            select: {
+              address: {
+                select: { street: true, number: true, city: true, state: true, country: true },
+              },
+            },
           },
-        },
-        documents: { select: { file_type: true } },
-        type: { select: { description: true } },
-        agency: { select: { id: true } },
-        addresses: {
-          select: {
-            address: { select: { street: true, number: true, city: true, state: true, country: true } },
+          documents: { 
+            where: { is_active: true },
+            select: { file_type: true } 
           },
+          agency: { 
+            where: { is_active: true },
+            select: { id: true, legal_name: true, trade_name: true } 
+          },
+          owner_id: true, // Adicionado para relacionamento com proprietários
         },
-      },
-    }),
-    prisma.owner.findMany({ 
-      where: { created_at: { gte: startDate, lte: endDate } }, 
-      select: { id: true, name: true, created_at: true } 
-    }),
-    prisma.owner.findMany({ 
-      where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, 
-      select: { id: true } 
-    }),
-    prisma.tenant.findMany({ 
-      where: { created_at: { gte: startDate, lte: endDate } }, 
-      select: { id: true, name: true, created_at: true } 
-    }),
-    prisma.tenant.findMany({ 
-      where: { created_at: { gte: prevStartDate, lte: prevEndDate } }, 
-      select: { id: true } 
-    }),
-    prisma.agency.findMany({
-      where: { created_at: { gte: startDate, lte: endDate } },
-      select: { id: true, legal_name: true, trade_name: true, created_at: true },
-    }),
-    prisma.agency.findMany({
-      where: { created_at: { gte: prevStartDate, lte: prevEndDate } },
-      select: { id: true },
-    }),
-  ]);
+        take: 1000, // Limitar resultados para performance
+        orderBy: { created_at: 'desc' }
+      }),
+      prisma.property.findMany({
+        where: { 
+          created_at: { gte: prevStartDate, lte: prevEndDate },
+          is_active: true 
+        },
+        select: {
+          id: true,
+          title: true,
+          values: {
+            where: { is_active: true },
+            select: {
+              rental_value: true,
+              property_tax: true,
+              condo_fee: true,
+              purchase_value: true,
+              sale_value: true,
+              current_status: true,
+            },
+          },
+          documents: { 
+            where: { is_active: true },
+            select: { file_type: true } 
+          },
+          type: { select: { description: true } },
+          agency: { 
+            where: { is_active: true },
+            select: { id: true } 
+          },
+          addresses: {
+            where: { is_active: true },
+            select: {
+              address: { select: { street: true, number: true, city: true, state: true, country: true } },
+            },
+          },
+          owner_id: true,
+        },
+        take: 1000,
+      }),
+      prisma.owner.findMany({ 
+        where: { 
+          created_at: { gte: startDate, lte: endDate },
+          is_active: true 
+        }, 
+        select: { id: true, name: true, created_at: true } 
+      }),
+      prisma.owner.findMany({ 
+        where: { 
+          created_at: { gte: prevStartDate, lte: prevEndDate },
+          is_active: true 
+        }, 
+        select: { id: true } 
+      }),
+      prisma.tenant.findMany({ 
+        where: { 
+          created_at: { gte: startDate, lte: endDate },
+          is_active: true 
+        }, 
+        select: { id: true, name: true, created_at: true } 
+      }),
+      prisma.tenant.findMany({ 
+        where: { 
+          created_at: { gte: prevStartDate, lte: prevEndDate },
+          is_active: true 
+        }, 
+        select: { id: true } 
+      }),
+      prisma.agency.findMany({
+        where: { 
+          created_at: { gte: startDate, lte: endDate },
+          is_active: true 
+        },
+        select: { id: true, legal_name: true, trade_name: true, created_at: true },
+      }),
+      prisma.agency.findMany({
+        where: { 
+          created_at: { gte: prevStartDate, lte: prevEndDate },
+          is_active: true 
+        },
+        select: { id: true },
+      }),
+    ]);
 
-  const toNum = (v: any) => decimalToNumber(v);
+    const toNum = (v: any) => decimalToNumber(v);
 
-  // ======== DADOS DETALHADOS ========
+    // ======== DADOS DETALHADOS ========
 
-  // Documentações pendentes (menos de 3 documentos)
-  const propertiesWithLessThan3Docs = properties
-    .filter((p) => (p.documents?.length || 0) < 3)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      documentCount: p.documents?.length || 0,
-      documents: p.documents?.map(d => ({ file_type: d.file_type })) || [],
-      type: p.type?.description || "Desconhecido",
-    }));
+    // Documentações pendentes (menos de 3 documentos)
+    const propertiesWithLessThan3Docs = properties
+      .filter((p) => (p.documents?.length || 0) < 3)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        documentCount: p.documents?.length || 0,
+        documents: p.documents?.map(d => ({ file_type: d.file_type })) || [],
+        type: p.type?.description || "Desconhecido",
+      }));
 
-  const prevPropertiesWithLessThan3Docs = prevProperties
-    .filter((p) => (p.documents?.length || 0) < 3)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      documentCount: p.documents?.length || 0,
-    }));
+    const prevPropertiesWithLessThan3Docs = prevProperties
+      .filter((p) => (p.documents?.length || 0) < 3)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        documentCount: p.documents?.length || 0,
+      }));
 
-  // Propriedades disponíveis
-  const availableProperties = properties
-    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE")
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      type: p.type?.description || "Desconhecido",
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-      areaTotal: toNum(p.area_total),
-      agency: p.agency ? {
-        id: p.agency.id,
-        tradeName: p.agency.trade_name,
-        legalName: p.agency.legal_name,
-      } : null,
-    }));
-
-  // Propriedades com valor de venda
-  const propertiesWithSaleValue = properties
-    .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      saleValue: toNum(p.values?.[0]?.sale_value),
-      type: p.type?.description || "Desconhecido",
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-    }));
-
-  const prevPropertiesWithSaleValue = prevProperties
-    .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      saleValue: toNum(p.values?.[0]?.sale_value),
-    }));
-
-  // Aluguéis ativos
-  const rentalActiveProperties = properties
-    .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "AVAILABLE")
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-      status: p.values?.[0]?.current_status,
-      type: p.type?.description || "Desconhecido",
-      agency: p.agency ? {
-        id: p.agency.id,
-        tradeName: p.agency.trade_name,
-      } : null,
-    }));
-
-  const prevRentalActiveProperties = prevProperties
-    .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "OCCUPIED")
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-    }));
-
-  // Propriedades com taxas e condomínio
-  const propertiesWithTaxAndCondo = properties
-    .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      propertyTax: toNum(p.values?.[0]?.property_tax),
-      condoFee: toNum(p.values?.[0]?.condo_fee),
-      totalTaxAndCondo: toNum(p.values?.[0]?.property_tax) + toNum(p.values?.[0]?.condo_fee),
-      type: p.type?.description || "Desconhecido",
-    }));
-
-  const prevPropertiesWithTaxAndCondo = prevProperties
-    .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      propertyTax: toNum(p.values?.[0]?.property_tax),
-      condoFee: toNum(p.values?.[0]?.condo_fee),
-    }));
-
-  // Propriedades com valor de aquisição
-  const propertiesWithAcquisitionValue = properties
-    .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      purchaseValue: toNum(p.values?.[0]?.purchase_value),
-      type: p.type?.description || "Desconhecido",
-      currentStatus: p.values?.[0]?.current_status,
-    }));
-
-  const prevPropertiesWithAcquisitionValue = prevProperties
-    .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      purchaseValue: toNum(p.values?.[0]?.purchase_value),
-    }));
-
-  // Propriedades com potencial de aluguel não ocupadas
-  const propertiesWithRentPotential = properties
-    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-      type: p.type?.description || "Desconhecido",
-      areaTotal: toNum(p.area_total),
-    }));
-
-  const prevPropertiesWithRentPotential = prevProperties
-    .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
-    .map((p) => ({
-      id: p.id,
-      title: p.title,
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-    }));
-
-  // Todas as propriedades do período
-  const allPropertiesDetails = properties.map((p) => ({
-    id: p.id,
-    title: p.title,
-    type: p.type?.description || "Desconhecido",
-    status: p.values?.[0]?.current_status,
-    rentalValue: toNum(p.values?.[0]?.rental_value),
-    saleValue: toNum(p.values?.[0]?.sale_value),
-    areaTotal: toNum(p.area_total),
-    documentCount: p.documents?.length || 0,
-    agency: p.agency ? {
-      id: p.agency.id,
-      tradeName: p.agency.trade_name,
-    } : null,
-  }));
-
-  const prevAllPropertiesDetails = prevProperties.map((p) => ({
-    id: p.id,
-    title: p.title,
-    type: p.type?.description || "Desconhecido",
-    status: p.values?.[0]?.current_status,
-  }));
-
-  // Proprietários do período
-  const ownersDetails = owners.map((owner) => ({
-    id: owner.id,
-    name: owner.name,
-    createdAt: owner.created_at,
-  }));
-
-  // Inquilinos do período
-  const tenantsDetails = tenants.map((tenant) => ({
-    id: tenant.id,
-    name: tenant.name,
-    createdAt: tenant.created_at,
-  }));
-
-  // Agências do período
-  const agenciesDetails = agencies.map((agency) => ({
-    id: agency.id,
-    legalName: agency.legal_name,
-    tradeName: agency.trade_name,
-    createdAt: agency.created_at,
-  }));
-
-  // ======== CÁLCULOS DAS MÉTRICAS ========
-
-  const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
-  const prevRentals = prevProperties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
-  const avgRental = rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
-  const prevAvgRental = prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
-
-  const averageRentalTicket = calcVariation(avgRental, prevAvgRental, 
-    properties.map(p => ({
-      id: p.id,
-      title: p.title,
-      rentalValue: toNum(p.values?.[0]?.rental_value),
-      type: p.type?.description || "Desconhecido",
-    }))
-  );
-
-  const totalRentalActive = calcVariation(
-    properties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
-    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
-    rentalActiveProperties
-  );
-
-  const totalAcquisitionValue = calcVariation(
-    properties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
-    prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
-    propertiesWithAcquisitionValue
-  );
-
-  const totalPropertyTaxAndCondoFee = calcVariation(
-    properties.reduce(
-      (a, p) =>
-        a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
-      0
-    ),
-    prevProperties.reduce(
-      (a, p) =>
-        a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
-      0
-    ),
-    propertiesWithTaxAndCondo
-  );
-
-  const totalPotentialRentUnoccupied = properties.reduce(
-    (a, p) =>
-      a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
-    0
-  );
-
-  const prevTotalPotentialRentUnoccupied = prevProperties.reduce(
-    (a, p) =>
-      a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
-    0
-  );
-
-  const vacancyInMonths = calcVariation(
-    avgRental ? totalPotentialRentUnoccupied / avgRental : 0,
-    avgRental ? prevTotalPotentialRentUnoccupied / avgRental : 0,
-    propertiesWithRentPotential
-  );
-
-  const financialVacancyRate = calcVariation(
-    totalRentalActive.result
-      ? (totalPotentialRentUnoccupied / totalRentalActive.result) * 100
-      : 0,
-    totalRentalActive.result
-      ? (prevTotalPotentialRentUnoccupied / totalRentalActive.result) * 100
-      : 0,
-    propertiesWithRentPotential
-  );
-
-  const totalPropertys = calcVariation(
-    properties.length, 
-    prevProperties.length,
-    allPropertiesDetails
-  );
-
-  const countPropertiesWithLessThan3Docs = calcVariation(
-    propertiesWithLessThan3Docs.length,
-    prevPropertiesWithLessThan3Docs.length,
-    propertiesWithLessThan3Docs
-  );
-
-  const totalPropertiesWithSaleValue = calcVariation(
-    propertiesWithSaleValue.length,
-    prevPropertiesWithSaleValue.length,
-    propertiesWithSaleValue
-  );
-
-  const ownersTotal = calcVariation(
-    owners.length, 
-    prevOwners.length,
-    ownersDetails
-  );
-
-  const tenantsTotal = calcVariation(
-    tenants.length, 
-    prevTenants.length,
-    tenantsDetails
-  );
-
-  const propertiesPerOwner = calcVariation(
-    properties.length / (owners.length || 1),
-    prevProperties.length / (prevOwners.length || 1),
-    ownersDetails.map(owner => ({
-      ...owner,
-      propertiesCount: properties.filter(p => 
-        // Aqui você precisaria ajustar para relacionar propriedades com proprietários
-        // Isso é um exemplo - você precisará adaptar baseado no seu schema
-        true // placeholder
-      ).length
-    }))
-  );
-
-  const agenciesTotal = calcVariation(
-    agencies.length, 
-    prevAgencies.length,
-    agenciesDetails
-  );
-
-  const availablePropertiesByType = Object.entries(
-    properties.reduce((acc: Record<string, number>, p) => {
-      const isAvailable = p.values?.[0]?.current_status === "AVAILABLE";
-      const type = p.type?.description || "Desconhecido";
-      if (isAvailable) acc[type] = (acc[type] || 0) + 1;
-      return acc;
-    }, {})
-  ).map(([name, value]) => ({ 
-    name, 
-    value,
-    data: availableProperties.filter(p => p.type === name)
-  }));
-
-  const propertiesByAgency = agencies.map((agency) => {
-    const agencyProperties = properties.filter((p) => p.agency?.id === agency.id);
-    return {
-      name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
-      value: agencyProperties.length,
-      data: agencyProperties.map(p => ({
+    // Propriedades disponíveis
+    const availableProperties = properties
+      .filter((p) => p.values?.[0]?.current_status === "AVAILABLE")
+      .map((p) => ({
         id: p.id,
         title: p.title,
         type: p.type?.description || "Desconhecido",
-        status: p.values?.[0]?.current_status,
-      }))
-    };
-  });
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+        areaTotal: toNum(p.area_total),
+        agency: p.agency ? {
+          id: p.agency.id,
+          tradeName: p.agency.trade_name,
+          legalName: p.agency.legal_name,
+        } : null,
+      }));
 
-  // ======== RETORNO COMPLETO ========
-  return {
-    // Métricas principais com dados internos
-    averageRentalTicket,
-    totalRentalActive,
-    totalAcquisitionValue,
-    financialVacancyRate,
-    totalPropertyTaxAndCondoFee,
-    vacancyInMonths,
-    totalPropertys,
-    countPropertiesWithLessThan3Docs,
-    totalPropertiesWithSaleValue,
-    ownersTotal,
-    tenantsTotal,
-    propertiesPerOwner,
-    agenciesTotal,
-    availablePropertiesByType,
-    propertiesByAgency,
-  };
+    // Propriedades com valor de venda
+    const propertiesWithSaleValue = properties
+      .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        saleValue: toNum(p.values?.[0]?.sale_value),
+        type: p.type?.description || "Desconhecido",
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+      }));
+
+    const prevPropertiesWithSaleValue = prevProperties
+      .filter((p) => p.values?.some((v) => toNum(v.sale_value) > 0))
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        saleValue: toNum(p.values?.[0]?.sale_value),
+      }));
+
+    // Aluguéis ativos
+    const rentalActiveProperties = properties
+      .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "AVAILABLE")
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+        status: p.values?.[0]?.current_status,
+        type: p.type?.description || "Desconhecido",
+        agency: p.agency ? {
+          id: p.agency.id,
+          tradeName: p.agency.trade_name,
+        } : null,
+      }));
+
+    const prevRentalActiveProperties = prevProperties
+      .filter((p) => toNum(p.values?.[0]?.rental_value) > 0 && p.values?.[0]?.current_status === "OCCUPIED")
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+      }));
+
+    // Propriedades com taxas e condomínio
+    const propertiesWithTaxAndCondo = properties
+      .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        propertyTax: toNum(p.values?.[0]?.property_tax),
+        condoFee: toNum(p.values?.[0]?.condo_fee),
+        totalTaxAndCondo: toNum(p.values?.[0]?.property_tax) + toNum(p.values?.[0]?.condo_fee),
+        type: p.type?.description || "Desconhecido",
+      }));
+
+    const prevPropertiesWithTaxAndCondo = prevProperties
+      .filter((p) => toNum(p.values?.[0]?.property_tax) > 0 || toNum(p.values?.[0]?.condo_fee) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        propertyTax: toNum(p.values?.[0]?.property_tax),
+        condoFee: toNum(p.values?.[0]?.condo_fee),
+      }));
+
+    // Propriedades com valor de aquisição
+    const propertiesWithAcquisitionValue = properties
+      .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        purchaseValue: toNum(p.values?.[0]?.purchase_value),
+        type: p.type?.description || "Desconhecido",
+        currentStatus: p.values?.[0]?.current_status,
+      }));
+
+    const prevPropertiesWithAcquisitionValue = prevProperties
+      .filter((p) => toNum(p.values?.[0]?.purchase_value) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        purchaseValue: toNum(p.values?.[0]?.purchase_value),
+      }));
+
+    // Propriedades com potencial de aluguel não ocupadas
+    const propertiesWithRentPotential = properties
+      .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+        type: p.type?.description || "Desconhecido",
+        areaTotal: toNum(p.area_total),
+      }));
+
+    const prevPropertiesWithRentPotential = prevProperties
+      .filter((p) => p.values?.[0]?.current_status === "AVAILABLE" && toNum(p.values?.[0]?.rental_value) > 0)
+      .map((p) => ({
+        id: p.id,
+        title: p.title,
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+      }));
+
+    // Todas as propriedades do período
+    const allPropertiesDetails: PropertyDetails[] = properties.map((p) => ({
+      id: p.id,
+      title: p.title,
+      type: p.type?.description || "Desconhecido",
+      status: p.values?.[0]?.current_status,
+      rentalValue: toNum(p.values?.[0]?.rental_value),
+      saleValue: toNum(p.values?.[0]?.sale_value),
+      areaTotal: toNum(p.area_total),
+      documentCount: p.documents?.length || 0,
+      agency: p.agency ? {
+        id: p.agency.id,
+        tradeName: p.agency.trade_name,
+      } : undefined,
+    }));
+
+    const prevAllPropertiesDetails = prevProperties.map((p) => ({
+      id: p.id,
+      title: p.title,
+      type: p.type?.description || "Desconhecido",
+      status: p.values?.[0]?.current_status,
+    }));
+
+    // Proprietários do período
+    const ownersDetails = owners.map((owner) => ({
+      id: owner.id,
+      name: owner.name,
+      createdAt: owner.created_at,
+    }));
+
+    // Inquilinos do período
+    const tenantsDetails = tenants.map((tenant) => ({
+      id: tenant.id,
+      name: tenant.name,
+      createdAt: tenant.created_at,
+    }));
+
+    // Agências do período
+    const agenciesDetails = agencies.map((agency) => ({
+      id: agency.id,
+      legalName: agency.legal_name,
+      tradeName: agency.trade_name,
+      createdAt: agency.created_at,
+    }));
+
+    // ======== CÁLCULOS DAS MÉTRICAS ========
+
+    const rentals = properties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
+    const prevRentals = prevProperties.flatMap((p) => p.values?.map((v) => toNum(v.rental_value)) || []);
+    const avgRental = rentals.length > 0 ? rentals.reduce((a, b) => a + b, 0) / rentals.length : 0;
+    const prevAvgRental = prevRentals.length > 0 ? prevRentals.reduce((a, b) => a + b, 0) / prevRentals.length : 0;
+
+    const averageRentalTicket = calcVariation(avgRental, prevAvgRental, 
+      properties.map(p => ({
+        id: p.id,
+        title: p.title,
+        rentalValue: toNum(p.values?.[0]?.rental_value),
+        type: p.type?.description || "Desconhecido",
+      }))
+    );
+
+    const totalRentalActive = calcVariation(
+      properties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
+      prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.rental_value), 0),
+      rentalActiveProperties
+    );
+
+    const totalAcquisitionValue = calcVariation(
+      properties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
+      prevProperties.reduce((a, p) => a + toNum(p.values?.[0]?.purchase_value), 0),
+      propertiesWithAcquisitionValue
+    );
+
+    const totalPropertyTaxAndCondoFee = calcVariation(
+      properties.reduce(
+        (a, p) =>
+          a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
+        0
+      ),
+      prevProperties.reduce(
+        (a, p) =>
+          a + (p.values?.reduce((s, v) => s + toNum(v.property_tax) + toNum(v.condo_fee), 0) ?? 0),
+        0
+      ),
+      propertiesWithTaxAndCondo
+    );
+
+    const totalPotentialRentUnoccupied = properties.reduce(
+      (a, p) =>
+        a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
+      0
+    );
+
+    const prevTotalPotentialRentUnoccupied = prevProperties.reduce(
+      (a, p) =>
+        a + (p.values?.[0]?.current_status === "AVAILABLE" ? toNum(p.values?.[0]?.rental_value) : 0),
+      0
+    );
+
+    const vacancyInMonths = calcVariation(
+      avgRental ? totalPotentialRentUnoccupied / avgRental : 0,
+      avgRental ? prevTotalPotentialRentUnoccupied / avgRental : 0,
+      propertiesWithRentPotential
+    );
+
+    const financialVacancyRate = calcVariation(
+      totalRentalActive.result
+        ? (totalPotentialRentUnoccupied / totalRentalActive.result) * 100
+        : 0,
+      totalRentalActive.result
+        ? (prevTotalPotentialRentUnoccupied / totalRentalActive.result) * 100
+        : 0,
+      propertiesWithRentPotential
+    );
+
+    const totalProperties = calcVariation(
+      properties.length, 
+      prevProperties.length,
+      allPropertiesDetails
+    );
+
+    const countPropertiesWithLessThan3Docs = calcVariation(
+      propertiesWithLessThan3Docs.length,
+      prevPropertiesWithLessThan3Docs.length,
+      propertiesWithLessThan3Docs
+    );
+
+    const totalPropertiesWithSaleValue = calcVariation(
+      propertiesWithSaleValue.length,
+      prevPropertiesWithSaleValue.length,
+      propertiesWithSaleValue
+    );
+
+    const ownersTotal = calcVariation(
+      owners.length, 
+      prevOwners.length,
+      ownersDetails
+    );
+
+    const tenantsTotal = calcVariation(
+      tenants.length, 
+      prevTenants.length,
+      tenantsDetails
+    );
+
+    // Calcular propriedades por proprietário corretamente
+    const ownerPropertiesCount = owners.map(owner => ({
+      ...owner,
+      propertiesCount: properties.filter(p => p.owner_id === owner.id).length
+    }));
+
+    const prevOwnerPropertiesCount = prevOwners.map(owner => ({
+      id: owner.id,
+      propertiesCount: prevProperties.filter(p => p.owner_id === owner.id).length
+    }));
+
+    const avgPropertiesPerOwner = ownerPropertiesCount.reduce((sum, owner) => 
+      sum + owner.propertiesCount, 0) / (owners.length || 1);
+    
+    const prevAvgPropertiesPerOwner = prevOwnerPropertiesCount.reduce((sum, owner) => 
+      sum + owner.propertiesCount, 0) / (prevOwners.length || 1);
+
+    const propertiesPerOwner = calcVariation(
+      avgPropertiesPerOwner,
+      prevAvgPropertiesPerOwner,
+      ownerPropertiesCount
+    );
+
+    const agenciesTotal = calcVariation(
+      agencies.length, 
+      prevAgencies.length,
+      agenciesDetails
+    );
+
+    const availablePropertiesByType = Object.entries(
+      properties.reduce((acc: Record<string, number>, p) => {
+        const isAvailable = p.values?.[0]?.current_status === "AVAILABLE";
+        const type = p.type?.description || "Desconhecido";
+        if (isAvailable) acc[type] = (acc[type] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([name, value]) => ({ 
+      name, 
+      value,
+      data: availableProperties.filter(p => p.type === name)
+    }));
+
+    const propertiesByAgency = agencies.map((agency) => {
+      const agencyProperties = properties.filter((p) => p.agency?.id === agency.id);
+      return {
+        name: agency.trade_name || agency.legal_name || `Agência ${agency.id}`,
+        value: agencyProperties.length,
+        data: agencyProperties.map(p => ({
+          id: p.id,
+          title: p.title,
+          type: p.type?.description || "Desconhecido",
+          status: p.values?.[0]?.current_status,
+        }))
+      };
+    });
+
+    // ======== RETORNO COMPLETO ========
+    return {
+      averageRentalTicket,
+      totalRentalActive,
+      totalAcquisitionValue,
+      financialVacancyRate,
+      totalPropertyTaxAndCondoFee,
+      vacancyInMonths,
+      totalProperties,
+      countPropertiesWithLessThan3Docs,
+      totalPropertiesWithSaleValue,
+      ownersTotal,
+      tenantsTotal,
+      propertiesPerOwner,
+      agenciesTotal,
+      availablePropertiesByType,
+      propertiesByAgency,
+    };
+  } catch (error) {
+    console.error('Error fetching dashboard metrics:', error);
+    throw new Error('Failed to fetch dashboard metrics');
+  }
 }
 
 export async function fetchDashboardGeolocation(startDate: Date, endDate: Date) {
-  const properties = await prisma.property.findMany({
-    where: { created_at: { gte: startDate, lte: endDate } },
-    select: {
-      title: true,
-      addresses: {
-        select: {
-          address: { select: { street: true, number: true, city: true, state: true, country: true } },
+  try {
+    validateDateRange(startDate, endDate);
+
+    const properties = await prisma.property.findMany({
+      where: { 
+        created_at: { gte: startDate, lte: endDate },
+        is_active: true 
+      },
+      select: {
+        title: true,
+        addresses: {
+          where: { is_active: true },
+          select: {
+            address: { 
+              select: { street: true, number: true, city: true, state: true, country: true } 
+            },
+          },
         },
       },
-    },
-  });
+      take: 100, // Limitar para não sobrecarregar a API
+    });
 
-  const flattenedAddresses = properties.flatMap((p) =>
-    p.addresses.map((a) => ({ ...a.address, number: a.address.number?.toString(), title: p.title }))
-  );
+    const flattenedAddresses = properties.flatMap((p) =>
+      p.addresses.map((a) => ({ 
+        ...a.address, 
+        number: a.address.number?.toString(), 
+        title: p.title 
+      }))
+    );
 
-  return await fetchCoordinatesBatch(flattenedAddresses, 3);
+    return await fetchCoordinatesBatch(flattenedAddresses, 3);
+  } catch (error) {
+    console.error('Error fetching geolocation data:', error);
+    throw new Error('Failed to fetch geolocation data');
+  }
 }
